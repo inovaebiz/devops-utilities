@@ -5,32 +5,48 @@
     <strong>Inova e-Business</strong>.
   </p>
   <p align="center">
-    <a href="https://github.com/inovaebiz/devops-utilities/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/inovaebiz/devops-utilities"></a>
-    <a href="https://github.com/inovaebiz/devops-utilities"><img alt="GitHub repo stars" src="https://img.shields.io/github/stars/inovaebiz/devops-utilities"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/inovaebiz/devops-utilities?color=blue"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities"><img alt="GitHub repo stars" src="https://img.shields.io/github/stars/inovaebiz/devops-utilities?color=yellow"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities"><img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/inovaebiz/devops-utilities"></a>
     <a href="https://github.com/inovaebiz/devops-utilities/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/inovaebiz/devops-utilities"></a>
     <a href="https://github.com/inovaebiz/devops-utilities/pulls"><img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/inovaebiz/devops-utilities"></a>
+    <img alt="Made with Bash" src="https://img.shields.io/badge/made%20with-Bash-4EAA25">
   </p>
 </p>
 
 ---
 
-## Requisitos
+## 📑 Sumário
 
-- **Linux** (ou ambiente compatível com `systemd` para os scripts de serviço)
-- **Docker** instalado e em execução
-- **Bash** 4+
+- [Sobre o projeto](#-sobre-o-projeto)
+- [Requisitos](#-requisitos)
+- [Instalação](#-instalação)
+- [Scripts disponíveis](#-scripts-disponíveis)
+- [Aviso legal](#-aviso-legal)
+- [Contribuindo](#-contribuindo)
+- [Licença](#-licença)
 
-## Sobre o projeto
+---
+
+## 💡 Sobre o projeto
 
 Este repositório reúne scripts, ferramentas e automações de infraestrutura e
 DevOps utilizados internamente pela **Inova e-Business**. Ele é disponibilizado
 publicamente com o objetivo de compartilhar boas práticas e facilitar o
 trabalho de outras equipes.
 
-## Instalação
+## 🧰 Requisitos
+
+- **Linux** (ou ambiente compatível com `systemd` para os scripts de serviço)
+- **Docker** instalado e em execução
+- **Bash** 4+
+- **curl** para baixar os scripts
+
+## 🚀 Instalação
 
 Cada script deste repositório pode ser baixado e instalado com as permissões
-corretas em uma única linha, usando o instalador genérico [`install.sh`](./install.sh):
+corretas em uma única linha, usando o instalador genérico
+[`install.sh`](./install.sh):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- <script> [diretorio]
@@ -48,17 +64,17 @@ Ou instale em um diretório customizado:
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh /opt/scripts
 ```
 
-> O instalador exige privilégios de root (rode com `sudo` quando necessário).
+> ⚠️ O instalador exige privilégios de root (rode com `sudo` quando necessário).
 > Sempre revise o conteúdo do script antes de executá-lo.
 
-## Conteúdo
+## 📦 Scripts disponíveis
 
-| Arquivo | Descrição |
-| --- | --- |
-| [`docker-cleanup.sh`](./docker-cleanup.sh) | Script para limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. |
-| [`install.sh`](./install.sh) | Instalador genérico que baixa qualquer script do repositório com as permissões corretas. |
+| Script | Descrição | Instalação |
+| --- | --- | --- |
+| [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL ...main/install.sh \| bash -s -- docker-cleanup.sh` |
+| [`install.sh`](./install.sh) | Instalador genérico que baixa qualquer script do repositório com as permissões corretas. | — |
 
-## Aviso legal
+## ⚖️ Aviso legal
 
 > **Este é um projeto público de uso interno da Inova e-Business.**
 >
@@ -70,7 +86,7 @@ curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/ins
 > O uso dos scripts e utilitários aqui presentes é de inteira
 > responsabilidade de quem os utilizar.
 
-## Contribuindo
+## 🤝 Contribuindo
 
 Este é um projeto público e colaborações são bem-vindas. Para contribuir:
 
@@ -80,7 +96,7 @@ Este é um projeto público e colaborações são bem-vindas. Para contribuir:
 4. Envie para o seu *fork* (`git push origin feature/minha-mudanca`).
 5. Abra um *Pull Request*.
 
-## Licença
+## 📄 Licença
 
 Distribuído sob a licença [MIT](./LICENSE).
 

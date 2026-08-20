@@ -259,16 +259,20 @@ print_header() {
 }
 
 render_list() {
-    local name ver_local ver_remote status i
+    local name ver_local ver_remote status status_color i
     info "Fetching script list from repository ..."
 
     local raw
     raw="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
     [ -n "$raw" ] || { warn "No scripts found in the repository."; return 0; }
 
+    local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16
+
     printf '\n'
-    printf '  %-3s %-24s %-8s %-8s %s\n' "#" "SCRIPT" "LOCAL" "REMOTE" "STATUS"
-    printf '  %-3s %-24s %-8s %-8s %s\n' "---" "------------------------" "--------" "--------" "----------------"
+    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
+        "$W_NUM" "#" "$W_NAME" "SCRIPT" "$W_LOCAL" "LOCAL" "$W_REMOTE" "REMOTE" "$W_STATUS" "STATUS"
+    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
+        "$W_NUM" "---" "$W_NAME" "------------------------" "$W_LOCAL" "--------" "$W_REMOTE" "--------" "$W_STATUS" "----------------"
 
     SCRIPTS_ARR=()
     i=1
@@ -280,20 +284,20 @@ render_list() {
 
         if is_installed "$name"; then
             if [ "$ver_remote" != "unknown" ] && [ "$ver_local" != "$ver_remote" ]; then
-                status="${C_YELLOW}update available${C_RESET}"
+                status="update available"; status_color="$C_YELLOW"
             else
-                status="${C_GREEN}up to date${C_RESET}"
+                status="up to date";      status_color="$C_GREEN"
             fi
         else
-            status="${C_DIM}not installed${C_RESET}"
+            status="not installed";       status_color="$C_DIM"
         fi
 
-        printf '  %-3s %-24s %-8s %-8s %s\n' \
-            "${C_DIM}${i}${C_RESET}" \
-            "${C_BOLD}${name}${C_RESET}" \
-            "${ver_local:-—}" \
-            "${ver_remote:-—}" \
-            "$status"
+        printf '  %-*s %-*s %-*s %-*s %s%-*s%s\n' \
+            "$W_NUM"   "${C_DIM}${i}${C_RESET}" \
+            "$W_NAME"  "${C_BOLD}${name}${C_RESET}" \
+            "$W_LOCAL" "${ver_local:-—}" \
+            "$W_REMOTE" "${ver_remote:-—}" \
+            "$status_color" "$W_STATUS" "$status" "$C_RESET"
         i=$((i + 1))
     done <<< "$raw"
 
@@ -307,7 +311,7 @@ render_list() {
 menu_prompt() {
     printf '\n'
     printf '  %s\n' "${C_CYAN}Pick a number to run (auto-installs if needed), or a command:${C_RESET}"
-    printf '  %s\n' "  [1-${SCRIPT_COUNT}] run    [a] update all    [r] remove    [l] refresh    [q] quit"
+    printf '  %s\n' "  [1-${SCRIPT_COUNT}] run     [a] update all     [r] remove     [l] refresh     [q] quit"
     printf '  %s' "${C_BOLD}>${C_RESET} "
     read -r choice
     case "$choice" in

@@ -198,10 +198,10 @@ do_install() {
 
     info "Installing to ${C_CYAN}${dest}${C_RESET} (${PERMISSIONS}) ..."
     if mkdir -p "$(dirname "$dest")" 2>/dev/null && [ -w "$(dirname "$dest")" ]; then
-        install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed."; rm -f "$tmp"; return 1; }
+        cp "$tmp" "$dest" && chmod "$PERMISSIONS" "$dest" || { err "Install failed."; rm -f "$tmp"; return 1; }
     else
         sudo mkdir -p "$(dirname "$dest")"
-        sudo install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
+        sudo cp "$tmp" "$dest" && sudo chmod "$PERMISSIONS" "$dest" || { err "Install failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
     fi
 
     ver="$(extract_version "$tmp")"
@@ -317,9 +317,9 @@ self_update() {
     curl -fsSL "${RAW_URL}/${SELF}" -o "$tmp" || { err "Download failed."; rm -f "$tmp"; return 1; }
 
     if [ "$(id -u)" -eq 0 ] || [ -w "$(dirname "$me")" ]; then
-        install -m 750 "$tmp" "$me" || { err "Update failed."; rm -f "$tmp"; return 1; }
+        cp "$tmp" "$me" && chmod 750 "$me" || { err "Update failed."; rm -f "$tmp"; return 1; }
     else
-        sudo install -m 750 "$tmp" "$me" || { err "Update failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
+        sudo cp "$tmp" "$me" && sudo chmod 750 "$me" || { err "Update failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
     fi
     rm -f "$tmp"
     ok "Manager updated to the latest version."

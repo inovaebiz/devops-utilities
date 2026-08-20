@@ -126,6 +126,27 @@ extract_version() {
         | tr -d '[:space:]'
 }
 
+extract_description() {
+    # extract_description <file> -> prints the "# Purpose:" block as one line
+    awk '/^# Purpose:/{p=1; next} p && /^#/{if ($0 ~ /^#   /){sub(/^#   /,""); print} else exit}' "$1" \
+        | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//'
+}
+
+remote_info() {
+    # remote_info <script> -> prints "version|description"
+    local tmp ver desc
+    tmp="$(mktemp)"
+    if curl -fsSL "${RAW_URL}/${1}" -o "$tmp" 2>/dev/null; then
+        ver="$(extract_version "$tmp")"
+        desc="$(extract_description "$tmp")"
+    else
+        ver="unknown"
+        desc=""
+    fi
+    rm -f "$tmp"
+    echo "${ver}|${desc}"
+}
+
 remote_version() {
     local tmp
     tmp="$(mktemp)"
@@ -342,14 +363,14 @@ print_header() {
 }
 
 render_list() {
-    local name ver_local ver_remote status status_color i
+    local name ver_local ver_remote status status_color desc info i
     info "Fetching script list from repository ..."
 
     local raw
     raw="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
     [ -n "$raw" ] || { warn "No scripts found in the repository."; return 0; }
 
-    local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16
+    local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16 W_DESC=72
 
     printf '\n'
     printf '  %-*s %-*s %-*s %-*s %-*s\n' \
@@ -363,7 +384,9 @@ render_list() {
         [ -n "$name" ] || continue
         SCRIPTS_ARR+=("$name")
         ver_local="$(local_version "$name")"
-        ver_remote="$(remote_version "$name")"
+        info="$(remote_info "$name")"
+        ver_remote="$(echo "$info" | cut -d'|' -f1)"
+        desc="$(echo "$info" | cut -d'|' -f2-)"
 
         if is_installed "$name"; then
             if [ "$ver_remote" != "unknown" ] && [ "$ver_local" != "$ver_remote" ]; then
@@ -381,6 +404,10 @@ render_list() {
             "$W_LOCAL" "${ver_local:-—}" \
             "$W_REMOTE" "${ver_remote:-—}" \
             "$status_color" "$W_STATUS" "$status" "$C_RESET"
+
+        if [ -n "$desc" ]; then
+            printf '%s\n' "$desc" | fold -s -w "$W_DESC" | sed 's/^/         /'
+        fi
         i=$((i + 1))
     done <<< "$raw"
 

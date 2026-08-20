@@ -38,6 +38,24 @@ log() {
     echo "$(date -Is) $1"
 }
 
+TTY=0
+[ -t 1 ] && TTY=1
+SPIN_FRAMES=('|' '/' '-' '\')
+if [[ "$(locale charmap 2>/dev/null)" == *"UTF"* ]]; then
+    SPIN_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+fi
+
+_spin() {
+    local pid="$1" label="$2" i=0 n=${#SPIN_FRAMES[@]}
+    [ "$TTY" = 1 ] || return
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r  \033[1;36m%s\033[0m %s   ' "${SPIN_FRAMES[$i]}" "$label"
+        i=$(( (i + 1) % n ))
+        sleep 0.08
+    done
+    printf '\r\033[K'
+}
+
 exec 9>/run/docker-cleanup.lock
 
 if ! flock -n 9; then
@@ -55,7 +73,16 @@ log "Docker disk usage before cleanup:"
 docker system df 2>&1
 
 log "Executing: docker system prune -af"
-docker system prune -af
+if [ "$TTY" = 1 ]; then
+    docker system prune -af > /tmp/docker-cleanup-prune.log 2>&1 &
+    PRUNE_PID=$!
+    _spin "$PRUNE_PID" "Cleaning Docker resources ..."
+    wait "$PRUNE_PID"
+    cat /tmp/docker-cleanup-prune.log
+    rm -f /tmp/docker-cleanup-prune.log
+else
+    docker system prune -af
+fi
 EXIT_CODE=$?
 
 log "Docker disk usage after cleanup:"

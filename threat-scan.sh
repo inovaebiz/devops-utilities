@@ -46,6 +46,24 @@ info()   { printf '  \033[1;34m[INFO]\033[0m   %s\n' "$*"; }
 warn()   { printf '  \033[1;33m[SUSPECT]\033[0m %s\n' "$*"; FOUND_ANY=1; }
 err()    { printf '  \033[1;31m[ALERT]\033[0m  %s\n' "$*"; FOUND_ANY=1; }
 
+TTY=0
+[ -t 1 ] && TTY=1
+SPIN_FRAMES=('|' '/' '-' '\')
+if [[ "$(locale charmap 2>/dev/null)" == *"UTF"* ]]; then
+    SPIN_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+fi
+
+_spin() {
+    local pid="$1" label="$2" i=0 n=${#SPIN_FRAMES[@]}
+    [ "$TTY" = 1 ] || return
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r  \033[1;36m%s\033[0m %s   ' "${SPIN_FRAMES[$i]}" "$label"
+        i=$(( (i + 1) % n ))
+        sleep 0.08
+    done
+    printf '\r\033[K'
+}
+
 # -----------------------------------------------------------------------------
 # Header
 # -----------------------------------------------------------------------------
@@ -247,7 +265,16 @@ secdim "7. Antivirus (optional)"
 
 if command -v clamscan >/dev/null 2>&1; then
     info "ClamAV found. Running quick scan of /tmp and /var/tmp (read-only)..."
-    clamscan -ri --no-summary /tmp /var/tmp 2>/dev/null | sed 's/^/      /'
+    if [ "$TTY" = 1 ]; then
+        clamscan -ri --no-summary /tmp /var/tmp > /tmp/threat-scan-clam.log 2>/dev/null &
+        CLAM_PID=$!
+        _spin "$CLAM_PID" "Scanning /tmp and /var/tmp with ClamAV ..."
+        wait "$CLAM_PID"
+        sed 's/^/      /' /tmp/threat-scan-clam.log
+        rm -f /tmp/threat-scan-clam.log
+    else
+        clamscan -ri --no-summary /tmp /var/tmp 2>/dev/null | sed 's/^/      /'
+    fi
 else
     info "ClamAV not installed. Install with: apt install clamav (or dnf install clamav)."
 fi

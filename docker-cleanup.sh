@@ -5,17 +5,16 @@
 #
 # Maintainer: Inova e-Business
 # Created: 2026-08-20
-# Version: 1.0
+# Version: 1.1
 #
 # Purpose:
-#   Prevent excessive Docker disk consumption on this EC2 instance caused by
-#   CI/CD builds and accumulated Docker images, containers and build cache.
+#   Prevent excessive Docker disk consumption caused by CI/CD builds and
+#   accumulated Docker images, containers and build cache.
 #
-# Background:
-#   In August 2026, Docker storage reached a high utilization level, with
-#   significant growth under /var/lib/docker/overlay2 and a large amount of
-#   reclaimable build data. This condition was identified as a potential cause
-#   of disk I/O degradation and instance instability.
+# Supported platforms:
+#   - Linux   : Docker Engine / Docker CE on any distribution
+#   - macOS   : Docker Desktop
+#   - Windows : Docker Desktop via Git Bash / MSYS2 / WSL
 #
 # Cleanup policy:
 #   - Remove stopped containers
@@ -24,6 +23,11 @@
 #   - Remove Docker build cache
 #   - NEVER remove Docker volumes automatically
 #
+# Notes:
+#   - Uses a portable mkdir-based lock (works on Linux, macOS and Windows).
+#   - Requires the Docker CLI in PATH. The daemon does not need to run under
+#     root on macOS/Windows (Docker Desktop handles permissions).
+#
 # Managed by:
 #   Inova e-Business
 # ==============================================================================
@@ -31,11 +35,31 @@
 set -uo pipefail
 
 TAG="docker-cleanup"
-VERSION="1.0"
+VERSION="1.1"
+
+OS_TYPE="$(uname -s 2>/dev/null || echo unknown)"
+case "$OS_TYPE" in
+    Darwin)
+        OS_NAME="macOS"
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        OS_NAME="Windows"
+        ;;
+    Linux)
+        OS_NAME="Linux"
+        ;;
+    *)
+        OS_NAME="$OS_TYPE"
+        ;;
+esac
 
 log() {
-    logger -t "$TAG" "$1"
-    echo "$(date -Is) $1"
+    local line
+    line="$(date +"%Y-%m-%dT%H:%M:%S%z") $1"
+    if [ "$OS_NAME" != "Windows" ] && command -v logger >/dev/null 2>&1; then
+        logger -t "$TAG" "$1" 2>/dev/null || true
+    fi
+    printf '%s\n' "$line"
 }
 
 TTY=0
@@ -56,17 +80,30 @@ _spin() {
     printf '\r\033[K'
 }
 
-exec 9>/run/docker-cleanup.lock
+# -----------------------------------------------------------------------------
+# Pre-flight checks
+# -----------------------------------------------------------------------------
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: Docker CLI not found. Install Docker (Desktop) for your OS and retry."
+    exit 1
+fi
 
-if ! flock -n 9; then
-    log "Cleanup skipped: another cleanup process is already running."
+# Portable lock (mkdir is atomic on Linux, macOS and Windows/NTFS)
+LOCK_DIR="${TMPDIR:-/tmp}/docker-cleanup.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$(date +"%Y-%m-%dT%H:%M:%S%z") Cleanup skipped: another cleanup process is already running."
     exit 0
 fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 log "============================================================"
 log "Docker cleanup started. Version=$VERSION Maintainer=Inova e-Business"
 
-DISK_BEFORE=$(df -h / | tail -1)
+if ! docker info >/dev/null 2>&1; then
+    log "WARNING: Docker daemon does not appear to be running. Docker commands may fail."
+fi
+
+DISK_BEFORE=$(df -h / 2>/dev/null | tail -1)
 log "Disk before cleanup: $DISK_BEFORE"
 
 log "Docker disk usage before cleanup:"
@@ -74,12 +111,12 @@ docker system df 2>&1
 
 log "Executing: docker system prune -af"
 if [ "$TTY" = 1 ]; then
-    docker system prune -af > /tmp/docker-cleanup-prune.log 2>&1 &
+    docker system prune -af > "${TMPDIR:-/tmp}/docker-cleanup-prune.log" 2>&1 &
     PRUNE_PID=$!
     _spin "$PRUNE_PID" "Cleaning Docker resources ..."
     wait "$PRUNE_PID"
-    cat /tmp/docker-cleanup-prune.log
-    rm -f /tmp/docker-cleanup-prune.log
+    cat "${TMPDIR:-/tmp}/docker-cleanup-prune.log"
+    rm -f "${TMPDIR:-/tmp}/docker-cleanup-prune.log"
 else
     docker system prune -af
 fi
@@ -88,7 +125,7 @@ EXIT_CODE=$?
 log "Docker disk usage after cleanup:"
 docker system df 2>&1
 
-DISK_AFTER=$(df -h / | tail -1)
+DISK_AFTER=$(df -h / 2>/dev/null | tail -1)
 log "Disk after cleanup: $DISK_AFTER"
 
 if [ "$EXIT_CODE" -eq 0 ]; then

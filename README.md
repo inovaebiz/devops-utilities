@@ -37,8 +37,8 @@ trabalho de outras equipes.
 
 ## 🧰 Requisitos
 
-- **Linux** (ou ambiente compatível com `systemd` para os scripts de serviço)
-- **Docker** instalado e em execução
+- **Linux**, **macOS** ou **Windows** (via Git Bash / MSYS2 / WSL)
+- **Docker** instalado e em execução (Docker Desktop no macOS/Windows)
 - **Bash** 4+
 - **curl** para baixar os scripts
 
@@ -97,12 +97,12 @@ curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/ins
 
 ## 📦 Scripts disponíveis
 
-| Script | Descrição | Instalação |
-| --- | --- | --- |
-| [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- docker-cleanup.sh` |
-| [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- sys-update-checker.sh` |
-| [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, cron, usuários, arquivos, kernel). | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- threat-scan.sh` |
-| [`install.sh`](./install.sh) | Gerenciador/instalador: baixa, rastreia versões, atualiza e remove os scripts, com menu interativo e comandos de linha. | — |
+| Script | Descrição | Plataformas | Instalação |
+| --- | --- | --- | --- |
+| [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | Linux · macOS · Windows (Docker Desktop) | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- docker-cleanup.sh` |
+| [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | Linux · macOS · Windows | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- sys-update-checker.sh` |
+| [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, agendamentos, usuários, arquivos, kernel). | Linux · macOS · Windows | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- threat-scan.sh` |
+| [`install.sh`](./install.sh) | Gerenciador/instalador: baixa, rastreia versões, atualiza e remove os scripts, com menu interativo e comandos de linha. | Linux · macOS · Windows | — |
 
 ## ⚖️ Aviso legal
 

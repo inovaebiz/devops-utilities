@@ -50,22 +50,22 @@ relação ao repositório.
 
 ### Instalando o gerenciador
 
-Baixe o gerenciador e execute o menu interativo:
+Baixe e execute o menu interativo em uma única linha (o `sudo` já cobre a
+instalação, sem erro de permissão):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh
 ```
 
 ### Comandos do gerenciador
 
 ```bash
-bash install.sh list                    # lista scripts + status/versões
-bash install.sh install docker-cleanup.sh
-bash install.sh update                  # atualiza todos os instalados
-bash install.sh update threat-scan.sh   # atualiza um script
-bash install.sh remove threat-scan.sh
-bash install.sh self-update             # atualiza o próprio gerenciador
+sudo bash /tmp/install.sh list                    # lista scripts + status/versões
+sudo bash /tmp/install.sh install docker-cleanup.sh
+sudo bash /tmp/install.sh update                  # atualiza todos os instalados
+sudo bash /tmp/install.sh update threat-scan.sh   # atualiza um script
+sudo bash /tmp/install.sh remove threat-scan.sh
+sudo bash /tmp/install.sh self-update             # atualiza o próprio gerenciador
 ```
 
 > O gerenciador detecta automaticamente quando há uma nova versão dele mesmo,
@@ -75,22 +75,22 @@ bash install.sh self-update             # atualiza o próprio gerenciador
 ### Instalação direta (sem menu)
 
 Você também pode baixar e instalar um script em uma única linha, sem o
-gerenciador:
+gerenciador (o `sudo` vai antes do `bash`, nunca antes do `curl`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- <script> [diretorio]
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- <script> [diretorio]
 ```
 
 Exemplo com o `docker-cleanup.sh` (instala em `/usr/local/sbin` com `chmod 750`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- docker-cleanup.sh
 ```
 
 Ou instale em um diretório customizado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh /opt/scripts
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- docker-cleanup.sh /opt/scripts
 ```
 
 > ℹ️ O download é feito como usuário normal; apenas a instalação final usa

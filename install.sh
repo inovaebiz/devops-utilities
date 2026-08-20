@@ -123,13 +123,15 @@ center_pad() {
 # Spinner
 # -----------------------------------------------------------------------------
 _spin() {
+    # Spinner frames go to stderr so they never corrupt captured stdout
+    # (e.g. inside "$(...)" command substitution where fd 1 is a pipe).
     local pid="$1" label="$2" i=0 n=${#SPIN_FRAMES[@]}
     while kill -0 "$pid" 2>/dev/null; do
-        printf '\r  %s%s%s %s' "$C_CYAN" "${SPIN_FRAMES[$i]}" "$C_RESET" "$label"
+        printf '\r  %s%s%s %s' "$C_CYAN" "${SPIN_FRAMES[$i]}" "$C_RESET" "$label" >&2
         i=$(( (i + 1) % n ))
         sleep 0.08
     done
-    printf '\r\033[K'
+    printf '\r\033[K' >&2
 }
 
 # -----------------------------------------------------------------------------
@@ -167,7 +169,7 @@ manifest_del() {
 fetch_script_list() {
     local tmpf json
     tmpf="$(mktemp)"
-    if [ "$TTY" = 1 ]; then
+    if [ -t 1 ] && [ "$TTY" = 1 ]; then
         curl -fsSL "$API_URL" -o "$tmpf" 2>/dev/null &
         _spin $! "Fetching script list ..."
         wait $! || { rm -f "$tmpf"; return 1; }
@@ -368,7 +370,7 @@ ask() {
 self_changelog() {
     local json tmpf
     tmpf="$(mktemp)"
-    if [ "$TTY" = 1 ]; then
+    if [ -t 1 ] && [ "$TTY" = 1 ]; then
         curl -fsSL "https://api.github.com/repos/${REPO}/commits?path=${SELF}&per_page=10" -o "$tmpf" 2>/dev/null &
         _spin $! "Fetching changelog ..."
         wait $! || { rm -f "$tmpf"; return 1; }

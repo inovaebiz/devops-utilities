@@ -398,9 +398,9 @@ render_list() {
             status="not installed";       status_color="$C_DIM"
         fi
 
-        printf '  %-*s %-*s %-*s %-*s %s%-*s%s\n' \
-            "$W_NUM"   "${C_DIM}${i}${C_RESET}" \
-            "$W_NAME"  "${C_BOLD}${name}${C_RESET}" \
+        printf '  %s%-*s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
+            "$C_DIM" "$W_NUM" "$i" "$C_RESET" \
+            "$C_BOLD" "$W_NAME" "$name" "$C_RESET" \
             "$W_LOCAL" "${ver_local:-—}" \
             "$W_REMOTE" "${ver_remote:-—}" \
             "$status_color" "$W_STATUS" "$status" "$C_RESET"

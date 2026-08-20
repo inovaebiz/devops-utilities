@@ -72,6 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/ins
 | Script | Descrição | Instalação |
 | --- | --- | --- |
 | [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL ...main/install.sh \| bash -s -- docker-cleanup.sh` |
+| [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | `curl -fsSL ...main/install.sh \| bash -s -- sys-update-checker.sh` |
 | [`install.sh`](./install.sh) | Instalador genérico que baixa qualquer script do repositório com as permissões corretas. | — |
 
 ## ⚖️ Aviso legal

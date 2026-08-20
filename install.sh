@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.1
+# Version: 2.2
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -32,11 +32,13 @@
 #   - The download happens as the current user; only the final install step is
 #     run with sudo (which may prompt for your password).
 #   - Installed scripts and their versions are tracked in a local manifest.
+#   - The interactive menu uses arrow-key navigation. If `gum` is installed it
+#     is used automatically for a nicer experience.
 # ==============================================================================
 
 set -uo pipefail
 
-VERSION="2.1"
+VERSION="2.2"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -49,14 +51,21 @@ PERMISSIONS="750"
 STATE_DIR="${HOME}/.inova-devops"
 MANIFEST="${STATE_DIR}/manifest"
 
-# Script list cache (populated by render_list / fetch)
+# Script data (populated by load_scripts)
 SCRIPTS_ARR=()
+ARR_LOCAL=()
+ARR_REMOTE=()
+ARR_INSTALLED=()
+ARR_DESC=()
 SCRIPT_COUNT=0
 
 # -----------------------------------------------------------------------------
-# Colors (only when stdout is a terminal)
+# Colors / unicode detection (only when stdout is a terminal)
 # -----------------------------------------------------------------------------
-if [ -t 1 ]; then
+TTY=0
+[ -t 1 ] && TTY=1
+
+if [ "$TTY" = 1 ]; then
     C_RESET=$'\033[0m'
     C_BOLD=$'\033[1m'
     C_DIM=$'\033[2m'
@@ -66,15 +75,56 @@ if [ -t 1 ]; then
     C_BLUE=$'\033[34m'
     C_MAGENTA=$'\033[35m'
     C_CYAN=$'\033[36m'
+    C_REV=$'\033[7m'
 else
     C_RESET="" C_BOLD="" C_DIM="" C_RED="" C_GREEN=""
-    C_YELLOW="" C_BLUE="" C_MAGENTA="" C_CYAN=""
+    C_YELLOW="" C_BLUE="" C_MAGENTA="" C_CYAN="" C_REV=""
 fi
 
-info()  { printf '  %s[INFO]%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }
-ok()    { printf '  %s[OK]%s   %s\n' "$C_GREEN" "$C_RESET" "$*"; }
-warn()  { printf '  %s[WARN]%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
-err()   { printf '  %s[ERR]%s  %s\n' "$C_RED" "$C_RESET" "$*"; }
+UTF8=0
+if [[ "$(locale charmap 2>/dev/null)" == *"UTF"* ]]; then UTF8=1; fi
+
+if [ "$UTF8" = 1 ]; then
+    B_TL="╭"; B_TR="╮"; B_BL="╰"; B_BR="╯"; B_H="─"; B_V="│"
+    SPIN_FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+    TICK="✓"; ARROW="▸"; CROSS="✗"
+else
+    B_TL="+"; B_TR="+"; B_BL="+"; B_BR="+"; B_H="-"; B_V="|"
+    SPIN_FRAMES=('|' '/' '-' '\')
+    TICK="*"; ARROW=">"; CROSS="x"
+fi
+
+GUM=0
+command -v gum >/dev/null 2>&1 && GUM=1
+
+info()  { printf '  %s[i]%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }
+ok()    { printf '  %s%s%s %s\n' "$C_GREEN" "$TICK" "$C_RESET" "$*"; }
+warn()  { printf '  %s[!]%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
+err()   { printf '  %s[!]%s %s\n' "$C_RED" "$C_RESET" "$*"; }
+
+rep() { local c="$1" n="$2" i s=""; for ((i=0;i<n;i++)); do s+="$c"; done; printf '%s' "$s"; }
+
+center_pad() {
+    local t w len pad
+    t="$1"
+    w="$2"
+    len=${#t}
+    pad=$(( (w - len) / 2 ))
+    printf '%*s%s%*s' "$pad" '' "$t" "$(( w - len - pad ))" ''
+}
+
+# -----------------------------------------------------------------------------
+# Spinner
+# -----------------------------------------------------------------------------
+_spin() {
+    local pid="$1" label="$2" i=0 n=${#SPIN_FRAMES[@]}
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r  %s%s%s %s' "$C_CYAN" "${SPIN_FRAMES[$i]}" "$C_RESET" "$label"
+        i=$(( (i + 1) % n ))
+        sleep 0.08
+    done
+    printf '\r\033[K'
+}
 
 # -----------------------------------------------------------------------------
 # State / manifest helpers
@@ -109,8 +159,16 @@ manifest_del() {
 # Repository / version helpers
 # -----------------------------------------------------------------------------
 fetch_script_list() {
-    local json
-    json="$(curl -fsSL "$API_URL" 2>/dev/null)" || return 1
+    local tmpf json
+    tmpf="$(mktemp)"
+    if [ "$TTY" = 1 ]; then
+        curl -fsSL "$API_URL" -o "$tmpf" 2>/dev/null &
+        _spin $! "Fetching script list ..."
+        wait $! || { rm -f "$tmpf"; return 1; }
+    else
+        curl -fsSL "$API_URL" -o "$tmpf" 2>/dev/null || { rm -f "$tmpf"; return 1; }
+    fi
+    json="$(cat "$tmpf")"; rm -f "$tmpf"
     if command -v jq >/dev/null 2>&1; then
         echo "$json" | jq -r '.[].name' | grep '\.sh$' | grep -v "^${SELF}$"
     else
@@ -127,13 +185,11 @@ extract_version() {
 }
 
 extract_description() {
-    # extract_description <file> -> prints the "# Purpose:" block as one line
     awk '/^# Purpose:/{p=1; next} p && /^#/{if ($0 ~ /^#   /){sub(/^#   /,""); print} else exit}' "$1" \
         | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//'
 }
 
 remote_info() {
-    # remote_info <script> -> prints "version|description"
     local tmp ver desc
     tmp="$(mktemp)"
     if curl -fsSL "${RAW_URL}/${1}" -o "$tmp" 2>/dev/null; then
@@ -174,7 +230,6 @@ is_installed() {
 }
 
 script_at() {
-    # script_at <n> -> prints the nth script name (1-based)
     printf '%s\n' "${SCRIPTS_ARR[$(( $1 - 1 ))]}"
 }
 
@@ -186,9 +241,14 @@ do_install() {
     url="${RAW_URL}/${name}"
     dest="${dir}/${name}"
 
-    info "Downloading ${C_CYAN}${name}${C_RESET} ..."
     tmp="$(mktemp)"
-    curl -fsSL "$url" -o "$tmp" || { err "Failed to download ${name}."; rm -f "$tmp"; return 1; }
+    if [ "$TTY" = 1 ]; then
+        curl -fsSL "$url" -o "$tmp" 2>/dev/null &
+        _spin $! "Downloading ${name} ..."
+        wait $! || { err "Failed to download ${name}."; rm -f "$tmp"; return 1; }
+    else
+        curl -fsSL "$url" -o "$tmp" 2>/dev/null || { err "Failed to download ${name}."; rm -f "$tmp"; return 1; }
+    fi
 
     if ! head -n1 "$tmp" | grep -q '^#!/'; then
         err "'${name}' does not look like an executable script."
@@ -273,7 +333,6 @@ run_script() {
 # Self-update
 # -----------------------------------------------------------------------------
 version_gt() {
-    # version_gt <a> <b> -> returns 0 if a > b
     local a="$1" b="$2" first
     [ "$a" = "$b" ] && return 1
     first="$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -n1)"
@@ -282,8 +341,10 @@ version_gt() {
 }
 
 ask() {
-    # ask "question" -> returns 0 for yes, 1 for no
     local ans
+    if [ "$GUM" = 1 ] && [ "$TTY" = 1 ]; then
+        gum confirm "$1" && return 0 || return 1
+    fi
     printf '  %s' "${C_BOLD}$1 [y/N]${C_RESET} "
     read -r ans
     case "$ans" in
@@ -293,8 +354,16 @@ ask() {
 }
 
 self_changelog() {
-    local json
-    json="$(curl -fsSL "https://api.github.com/repos/${REPO}/commits?path=${SELF}&per_page=10" 2>/dev/null)" || return 1
+    local json tmpf
+    tmpf="$(mktemp)"
+    if [ "$TTY" = 1 ]; then
+        curl -fsSL "https://api.github.com/repos/${REPO}/commits?path=${SELF}&per_page=10" -o "$tmpf" 2>/dev/null &
+        _spin $! "Fetching changelog ..."
+        wait $! || { rm -f "$tmpf"; return 1; }
+        json="$(cat "$tmpf")"; rm -f "$tmpf"
+    else
+        json="$(curl -fsSL "https://api.github.com/repos/${REPO}/commits?path=${SELF}&per_page=10" 2>/dev/null)" || return 1
+    fi
     if command -v jq >/dev/null 2>&1; then
         echo "$json" | jq -r '.[].commit.message' | sed 's/^/    • /'
     else
@@ -313,8 +382,13 @@ self_update() {
     fi
 
     tmp="$(mktemp)"
-    info "Downloading latest ${C_CYAN}${SELF}${C_RESET} ..."
-    curl -fsSL "${RAW_URL}/${SELF}" -o "$tmp" || { err "Download failed."; rm -f "$tmp"; return 1; }
+    if [ "$TTY" = 1 ]; then
+        curl -fsSL "${RAW_URL}/${SELF}" -o "$tmp" 2>/dev/null &
+        _spin $! "Downloading latest ${SELF} ..."
+        wait $! || { err "Download failed."; rm -f "$tmp"; return 1; }
+    else
+        curl -fsSL "${RAW_URL}/${SELF}" -o "$tmp" 2>/dev/null || { err "Download failed."; rm -f "$tmp"; return 1; }
+    fi
 
     if [ "$(id -u)" -eq 0 ] || [ -w "$(dirname "$me")" ]; then
         cp "$tmp" "$me" && chmod 750 "$me" || { err "Update failed."; rm -f "$tmp"; return 1; }
@@ -356,90 +430,172 @@ self_update_check() {
 # Rendering
 # -----------------------------------------------------------------------------
 print_header() {
-    printf '\n  %s\n' "${C_BOLD}${C_MAGENTA}============================================================${C_RESET}"
-    printf '  %s\n' "${C_BOLD}  Inova e-Business · DevOps Utilities Manager${C_RESET}"
-    printf '  %s\n' "${C_DIM}  Version ${VERSION} · ${REPO} (${BRANCH})${C_RESET}"
-    printf '  %s\n' "${C_BOLD}${C_MAGENTA}============================================================${C_RESET}"
+    local w=58
+    printf '\n'
+    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_TL" "$(rep "$B_H" "$w")" "$B_TR" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_V" "$(center_pad "Inova e-Business · DevOps Utilities" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_V" "$(center_pad "Manager v${VERSION} · ${REPO} (${BRANCH})" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_BL" "$(rep "$B_H" "$w")" "$B_BR" "$C_RESET"
     printf '\n'
 }
 
-render_list() {
-    local name ver_local ver_remote status status_color desc info i
-    info "Fetching script list from repository ..."
+status_of() {
+    local installed="$1" lv="$2" rv="$3"
+    if [ "$installed" = 0 ]; then
+        printf '%s' "not installed"
+    elif [ "$rv" != "unknown" ] && [ -n "$rv" ] && [ "$lv" != "$rv" ]; then
+        printf '%s' "update available"
+    else
+        printf '%s' "up to date"
+    fi
+}
 
-    local raw
-    raw="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
-    [ -n "$raw" ] || { warn "No scripts found in the repository."; return 0; }
+status_color() {
+    case "$1" in
+        "not installed")     printf '%s' "$C_DIM" ;;
+        "update available")  printf '%s' "$C_YELLOW" ;;
+        *)                   printf '%s' "$C_GREEN" ;;
+    esac
+}
 
+load_scripts() {
+    local names tmpf name lv rv info desc installed
+    names="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
+    [ -n "$names" ] || { warn "No scripts found in the repository."; SCRIPT_COUNT=0; return 0; }
+
+    tmpf="$(mktemp)"
+    (
+        while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            lv="$(local_version "$name")"
+            if is_installed "$name"; then installed=1; else installed=0; fi
+            info="$(remote_info "$name")"
+            rv="${info%%|*}"; desc="${info#*|}"
+            printf '%s|%s|%s|%s|%s\n' "$name" "$lv" "$rv" "$installed" "$desc"
+        done <<< "$names"
+    ) > "$tmpf" &
+    local pid=$!
+    if [ "$TTY" = 1 ]; then _spin "$pid" "Loading scripts ..."; fi
+    wait "$pid"
+
+    SCRIPTS_ARR=(); ARR_LOCAL=(); ARR_REMOTE=(); ARR_INSTALLED=(); ARR_DESC=()
+    while IFS='|' read -r name lv rv installed desc; do
+        [ -n "$name" ] || continue
+        SCRIPTS_ARR+=("$name")
+        ARR_LOCAL+=("$lv")
+        ARR_REMOTE+=("$rv")
+        ARR_INSTALLED+=("$installed")
+        ARR_DESC+=("$desc")
+    done < "$tmpf"
+    rm -f "$tmpf"
+
+    SCRIPT_COUNT=${#SCRIPTS_ARR[@]}
+}
+
+print_table() {
+    local sel="${1:-0}" i lv rv installed desc st stc num
     local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16 W_DESC=72
 
-    printf '\n'
     printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "#" "$W_NAME" "SCRIPT" "$W_LOCAL" "LOCAL" "$W_REMOTE" "REMOTE" "$W_STATUS" "STATUS"
     printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "---" "$W_NAME" "------------------------" "$W_LOCAL" "--------" "$W_REMOTE" "--------" "$W_STATUS" "----------------"
 
-    SCRIPTS_ARR=()
-    i=1
-    while IFS= read -r name; do
-        [ -n "$name" ] || continue
-        SCRIPTS_ARR+=("$name")
-        ver_local="$(local_version "$name")"
-        info="$(remote_info "$name")"
-        ver_remote="$(echo "$info" | cut -d'|' -f1)"
-        desc="$(echo "$info" | cut -d'|' -f2-)"
+    for ((i=1; i<=SCRIPT_COUNT; i++)); do
+        lv="${ARR_LOCAL[$i-1]}"
+        rv="${ARR_REMOTE[$i-1]}"
+        installed="${ARR_INSTALLED[$i-1]}"
+        desc="${ARR_DESC[$i-1]}"
+        st="$(status_of "$installed" "$lv" "$rv")"
+        stc="$(status_color "$st")"
 
-        if is_installed "$name"; then
-            if [ "$ver_remote" != "unknown" ] && [ "$ver_local" != "$ver_remote" ]; then
-                status="update available"; status_color="$C_YELLOW"
-            else
-                status="up to date";      status_color="$C_GREEN"
-            fi
+        if [ "$sel" = "$i" ]; then
+            num="${C_CYAN}${ARROW}${i}${C_RESET}"
         else
-            status="not installed";       status_color="$C_DIM"
+            num="${C_DIM}${i}${C_RESET}"
         fi
 
-        printf '  %s%-*s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
-            "$C_DIM" "$W_NUM" "$i" "$C_RESET" \
-            "$C_BOLD" "$W_NAME" "$name" "$C_RESET" \
-            "$W_LOCAL" "${ver_local:-—}" \
-            "$W_REMOTE" "${ver_remote:-—}" \
-            "$status_color" "$W_STATUS" "$status" "$C_RESET"
+        printf '  %-*s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
+            "$W_NUM" "$num" \
+            "$C_BOLD" "$W_NAME" "${SCRIPTS_ARR[$i-1]}" "$C_RESET" \
+            "$W_LOCAL" "${lv:-—}" \
+            "$W_REMOTE" "${rv:-—}" \
+            "$stc" "$W_STATUS" "$st" "$C_RESET"
 
         if [ -n "$desc" ]; then
             printf '%s\n' "$desc" | fold -s -w "$W_DESC" | sed 's/^/         /'
         fi
-        i=$((i + 1))
-    done <<< "$raw"
-
-    SCRIPT_COUNT=$((i - 1))
-    printf '\n'
+    done
 }
 
 # -----------------------------------------------------------------------------
 # Interactive menu
 # -----------------------------------------------------------------------------
-menu_prompt() {
+read_key() {
+    local k k2
+    IFS= read -rsn1 k 2>/dev/null || { echo "ESC"; return; }
+    if [ "$k" = $'\033' ]; then
+        IFS= read -rsn2 k2 2>/dev/null || true
+        case "$k2" in
+            '[A') echo "UP" ;;
+            '[B') echo "DOWN" ;;
+            '[C') echo "RIGHT" ;;
+            '[D') echo "LEFT" ;;
+            '') echo "ESC" ;;
+            *) echo "$k$k2" ;;
+        esac
+        return
+    fi
+    if [ "$k" = "" ]; then echo "ENTER"; else echo "$k"; fi
+}
+
+render_menu() {
+    local sel="${1:-1}"
+    printf '\033[2J\033[H'
+    print_header
+    print_table "$sel"
     printf '\n'
-    printf '  %s\n' "${C_CYAN}Pick a number to run (auto-installs if needed), or a command:${C_RESET}"
-    printf '  %s\n' "  [1-${SCRIPT_COUNT}] run     [a] update all     [r] remove     [l] refresh     [q] quit"
+    printf '  %s%s%s\n' "$C_CYAN" "↑/↓ navigate   Enter run   a update all   r remove   l reload   q quit" "$C_RESET"
     printf '  %s' "${C_BOLD}>${C_RESET} "
-    read -r choice
-    case "$choice" in
-        q|Q|quit|exit|"") return 1 ;;
-        a|A) menu_update_all ;;
-        r|R) menu_remove ;;
-        l|L) render_list ;;
-        [0-9]*)
-            if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "$SCRIPT_COUNT" ] 2>/dev/null; then
-                run_script "$(script_at "$choice")"
-            else
-                warn "Invalid number: ${choice}"
-            fi
-            ;;
-        *) warn "Unknown command. Use a number, a, r, l or q." ;;
-    esac
-    return 0
+}
+
+arrow_menu() {
+    local sel=1 key
+    while true; do
+        render_menu "$sel"
+        key="$(read_key)"
+        case "$key" in
+            UP)   sel=$(( sel > 1 ? sel - 1 : SCRIPT_COUNT )) ;;
+            DOWN) sel=$(( sel < SCRIPT_COUNT ? sel + 1 : 1 )) ;;
+            ENTER)
+                printf '\n'
+                run_script "$(script_at "$sel")"
+                load_scripts
+                sel=1
+                ;;
+            a|A) printf '\n'; menu_update_all; load_scripts ;;
+            r|R) printf '\n'; do_remove "$(script_at "$sel")"; load_scripts ;;
+            l|L) load_scripts ;;
+            q|Q|ESC) return 1 ;;
+        esac
+    done
+}
+
+gum_menu() {
+    local choice opts=() opt
+    for opt in "${SCRIPTS_ARR[@]}"; do opts+=("$opt"); done
+    opts+=("Update all installed" "Remove a script" "Quit")
+
+    while true; do
+        choice="$(printf '%s\n' "${opts[@]}" | gum choose --height 15 --header "DevOps Utilities · select a script to run")"
+        case "$choice" in
+            "") return 1 ;;
+            "Update all installed") menu_update_all; load_scripts ;;
+            "Remove a script") menu_remove_gum ;;
+            "Quit") return 1 ;;
+            *) printf '\n'; run_script "$choice"; load_scripts ;;
+        esac
+    done
 }
 
 menu_update_all() {
@@ -448,7 +604,6 @@ menu_update_all() {
         is_installed "$name" && do_update "$name"
     done
     ok "Update pass completed."
-    render_list
 }
 
 menu_remove() {
@@ -462,14 +617,23 @@ menu_remove() {
     fi
 }
 
+menu_remove_gum() {
+    local choice
+    choice="$(printf '%s\n' "${SCRIPTS_ARR[@]}" | gum choose --height 15 --header "Select a script to remove")"
+    [ -n "$choice" ] && do_remove "$choice"
+}
+
 interactive_menu() {
     print_header
     self_update_check
-    render_list || return 1
-    local keep=0
-    while [ "$keep" -eq 0 ]; do
-        menu_prompt || keep=1
-    done
+    load_scripts || return 1
+    [ "$SCRIPT_COUNT" -gt 0 ] || return 1
+
+    if [ "$GUM" = 1 ] && [ "$TTY" = 1 ]; then
+        gum_menu
+    else
+        arrow_menu
+    fi
     printf '\n'
     ok "Bye!"
 }
@@ -506,14 +670,14 @@ CMD="${1:-}"
 
 case "$CMD" in
     ""|menu)       interactive_menu ;;
-    list|status)   print_header; self_update_check; render_list ;;
+    list|status)   print_header; self_update_check; load_scripts; print_table ;;
     self-update)   self_update ;;
     install)       do_install "${2:-}" "${3:-}" ;;
     update)
         if [ -n "${2:-}" ]; then
             do_update "$2"
         else
-            render_list
+            load_scripts
             for name in "${SCRIPTS_ARR[@]}"; do
                 is_installed "$name" && do_update "$name"
             done

@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.5
+# Version: 2.6
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -38,7 +38,7 @@
 
 set -uo pipefail
 
-VERSION="2.5"
+VERSION="2.6"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -507,12 +507,12 @@ load_scripts() {
 }
 
 print_table() {
-    local sel="${1:-0}" i lv rv installed desc st stc
+    local sel="${1:-0}" show_desc="${2:-0}" i lv rv installed desc st stc
     local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16 W_DESC=72
 
-    printf '  %*s %-*s %-*s %-*s %-*s\n' \
+    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "#" "$W_NAME" "SCRIPT" "$W_LOCAL" "LOCAL" "$W_REMOTE" "REMOTE" "$W_STATUS" "STATUS"
-    printf '  %*s %-*s %-*s %-*s %-*s\n' \
+    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "---" "$W_NAME" "------------------------" "$W_LOCAL" "--------" "$W_REMOTE" "--------" "$W_STATUS" "----------------"
 
     for ((i=1; i<=SCRIPT_COUNT; i++)); do
@@ -523,26 +523,58 @@ print_table() {
         st="$(status_of "$installed" "$lv" "$rv")"
         stc="$(status_color "$st")"
 
-        # Cursor (1 char) + space + right-aligned number (2 chars) => fixed 4 chars, ASCII only
-        local cur numtxt numcol
-        if [ "$sel" = "$i" ]; then
-            cur=">"; numcol="$C_CYAN"
-        else
-            cur=" "; numcol="$C_DIM"
-        fi
+        # Cursor (1 char) + space + right-aligned number (2 chars) => fixed 4 chars
+        local pref numtxt
+        if [ "$sel" = "$i" ]; then pref="> "; else pref="  "; fi
         numtxt="$(printf '%2d' "$i")"
 
-        printf '  %s%s%s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
-            "$numcol" "$cur" "$numtxt" "$C_RESET" \
-            "$C_BOLD" "$W_NAME" "${SCRIPTS_ARR[$i-1]}" "$C_RESET" \
-            "$W_LOCAL" "${lv:--}" \
-            "$W_REMOTE" "${rv:--}" \
-            "$stc" "$W_STATUS" "$st" "$C_RESET"
+        if [ "$show_desc" = 1 ]; then
+            # list style: colored status + inline description
+            local nc="$C_DIM"; [ "$sel" = "$i" ] && nc="$C_CYAN"
+            printf '  %s%s%s %-*s %-*s %-*s %s%-*s%s\n' \
+                "$nc" "${pref}${numtxt}" "$C_RESET" \
+                "$W_NAME" "${SCRIPTS_ARR[$i-1]}" \
+                "$W_LOCAL" "${lv:--}" \
+                "$W_REMOTE" "${rv:--}" \
+                "$stc" "$W_STATUS" "$st" "$C_RESET"
+        else
+            # menu style: plain row, whole selected row highlighted
+            local row
+            row="$(printf '%-*s %-*s %-*s %-*s %-*s' "$W_NUM" "${pref}${numtxt}" "$W_NAME" "${SCRIPTS_ARR[$i-1]}" "$W_LOCAL" "${lv:--}" "$W_REMOTE" "${rv:--}" "$W_STATUS" "$st")"
+            if [ "$sel" = "$i" ]; then
+                printf '  %s%s%s\n' "$C_REV" "$row" "$C_RESET"
+            else
+                printf '  %s\n' "$row"
+            fi
+        fi
 
-        if [ -n "$desc" ]; then
+        if [ "$show_desc" = 1 ] && [ -n "$desc" ]; then
             printf '%s\n' "$desc" | fold -s -w "$W_DESC" | sed 's/^/         /'
         fi
     done
+}
+
+# Detail panel for the currently selected script (interactive menu).
+print_details() {
+    local sel="$1" name desc lv rv st CW=52 line
+    [ "$SCRIPT_COUNT" -gt 0 ] || return 0
+    name="${SCRIPTS_ARR[$((sel-1))]}"
+    desc="${ARR_DESC[$((sel-1))]}"
+    lv="${ARR_LOCAL[$((sel-1))]}"
+    rv="${ARR_REMOTE[$((sel-1))]}"
+    st="$(status_of "${ARR_INSTALLED[$((sel-1))]}" "$lv" "$rv")"
+
+    printf '\n'
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_TL" "$(rep "$B_H" "$(( CW + 2 ))")" "$B_TR" "$C_RESET"
+    printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "$(printf '%s%s%s %s' "$C_CYAN" "$ARROW" "$C_RESET" "$name")" "$C_CYAN$B_V$C_RESET"
+    printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "local: ${lv:-n/a}   remote: ${rv:-n/a}   status: ${st}" "$C_CYAN$B_V$C_RESET"
+    if [ -n "$desc" ]; then
+        printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "" "$C_CYAN$B_V$C_RESET"
+        while IFS= read -r line; do
+            printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "$line" "$C_CYAN$B_V$C_RESET"
+        done <<< "$(printf '%s\n' "$desc" | fold -s -w "$CW")"
+    fi
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_BL" "$(rep "$B_H" "$(( CW + 2 ))")" "$B_BR" "$C_RESET"
 }
 
 # -----------------------------------------------------------------------------
@@ -571,8 +603,9 @@ render_menu() {
     printf '\033[2J\033[H'
     print_header
     print_table "$sel"
+    print_details "$sel"
     printf '\n'
-    printf '  %s%s%s\n' "$C_CYAN" "↑/↓ navigate   Enter run   a update all   r remove   l reload   q quit" "$C_RESET"
+    printf '  %s%s%s\n' "$C_CYAN" "↑/↓ select   Enter run   a update all   r remove   l reload   q quit" "$C_RESET"
     printf '  %s' "${C_BOLD}>${C_RESET} "
 }
 
@@ -697,7 +730,7 @@ CMD="${1:-}"
 
 case "$CMD" in
     ""|menu)       interactive_menu ;;
-    list|status)   print_header; self_update_check; load_scripts; print_table ;;
+    list|status)   print_header; self_update_check; load_scripts; print_table 0 1 ;;
     self-update)   self_update ;;
     install)       do_install "${2:-}" "${3:-}" ;;
     update)

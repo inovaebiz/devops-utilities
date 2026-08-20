@@ -196,17 +196,19 @@ extract_description() {
 }
 
 remote_info() {
-    local tmp ver desc
-    tmp="$(mktemp)"
-    if curl -fsSL "${RAW_URL}/${1}" -o "$tmp" 2>/dev/null; then
-        ver="$(extract_version "$tmp")"
-        desc="$(extract_description "$tmp")"
-    else
-        ver="unknown"
-        desc=""
-    fi
-    rm -f "$tmp"
-    echo "${ver}|${desc}"
+    local tmp ver desc attempt
+    for attempt in 1 2 3; do
+        tmp="$(mktemp)"
+        if curl -fsSL --max-time 15 "${RAW_URL}/${1}" -o "$tmp" 2>/dev/null; then
+            ver="$(extract_version "$tmp")"
+            desc="$(extract_description "$tmp")"
+            rm -f "$tmp"
+            [ -n "$ver" ] && [ "$ver" != "unknown" ] && { echo "${ver}|${desc}"; return 0; }
+        fi
+        rm -f "$tmp"
+        sleep 1
+    done
+    echo "unknown|"
 }
 
 remote_version() {
@@ -568,8 +570,8 @@ print_table() {
         fi
         numtxt="$(printf '%2d' "$i")"
 
-        printf '  %s%s %s%s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
-            "$numcol" "$cur" "$numcol" "$numtxt" "$C_RESET" \
+        printf '  %s%s%s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
+            "$numcol" "$cur" "$numtxt" "$C_RESET" \
             "$C_BOLD" "$W_NAME" "${SCRIPTS_ARR[$i-1]}" "$C_RESET" \
             "$W_LOCAL" "${lv:--}" \
             "$W_REMOTE" "${rv:--}" \

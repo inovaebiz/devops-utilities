@@ -197,9 +197,10 @@ do_install() {
     fi
 
     info "Installing to ${C_CYAN}${dest}${C_RESET} (${PERMISSIONS}) ..."
-    if [ "$(id -u)" -eq 0 ] || [ -w "$(dirname "$dest")" ]; then
+    if mkdir -p "$(dirname "$dest")" 2>/dev/null && [ -w "$(dirname "$dest")" ]; then
         install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed."; rm -f "$tmp"; return 1; }
     else
+        sudo mkdir -p "$(dirname "$dest")"
         sudo install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
     fi
 
@@ -507,7 +508,7 @@ case "$CMD" in
     ""|menu)       interactive_menu ;;
     list|status)   print_header; self_update_check; render_list ;;
     self-update)   self_update ;;
-    install)       do_install "${2:-}" ;;
+    install)       do_install "${2:-}" "${3:-}" ;;
     update)
         if [ -n "${2:-}" ]; then
             do_update "$2"

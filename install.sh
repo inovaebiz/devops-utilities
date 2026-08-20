@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.6
+# Version: 2.7
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -38,7 +38,7 @@
 
 set -uo pipefail
 
-VERSION="2.6"
+VERSION="2.7"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -566,7 +566,7 @@ print_details() {
 
     printf '\n'
     printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_TL" "$(rep "$B_H" "$(( CW + 2 ))")" "$B_TR" "$C_RESET"
-    printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "$(printf '%s%s%s %s' "$C_CYAN" "$ARROW" "$C_RESET" "$name")" "$C_CYAN$B_V$C_RESET"
+    printf '  %s %s%s%s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$C_CYAN" "$ARROW" "$C_RESET" "$(( CW - 2 ))" "$name" "$C_CYAN$B_V$C_RESET"
     printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "local: ${lv:-n/a}   remote: ${rv:-n/a}   status: ${st}" "$C_CYAN$B_V$C_RESET"
     if [ -n "$desc" ]; then
         printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "" "$C_CYAN$B_V$C_RESET"
@@ -598,14 +598,30 @@ read_key() {
     if [ "$k" = "" ]; then echo "ENTER"; else echo "$k"; fi
 }
 
+# Action legend for the interactive menu.
+print_actions() {
+    printf '\n'
+    printf '  %s%s%s\n' "$C_YELLOW" "Actions" "$C_RESET"
+    printf '  %s%s%s\n' "$C_DIM" "$(rep "$B_H" 54)" "$C_RESET"
+    printf '  %s%-5s%s %-22s%s%-5s%s %-26s\n' \
+        "$C_BOLD" "↑/↓" "$C_RESET" "select script" \
+        "$C_BOLD" "Enter" "$C_RESET" "run the selected script"
+    printf '  %s%-5s%s %-22s%s%-5s%s %-26s\n' \
+        "$C_BOLD" "a" "$C_RESET" "update all installed" \
+        "$C_BOLD" "r" "$C_RESET" "remove the selected script"
+    printf '  %s%-5s%s %-22s%s%-5s%s %-26s\n' \
+        "$C_BOLD" "l" "$C_RESET" "reload the list" \
+        "$C_BOLD" "q" "$C_RESET" "quit"
+    printf '\n'
+}
+
 render_menu() {
     local sel="${1:-1}"
     printf '\033[2J\033[H'
     print_header
     print_table "$sel"
     print_details "$sel"
-    printf '\n'
-    printf '  %s%s%s\n' "$C_CYAN" "↑/↓ select   Enter run   a update all   r remove   l reload   q quit" "$C_RESET"
+    print_actions
     printf '  %s' "${C_BOLD}>${C_RESET} "
 }
 

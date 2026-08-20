@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.2
+# Version: 2.4
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -38,7 +38,7 @@
 
 set -uo pipefail
 
-VERSION="2.3"
+VERSION="2.4"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -276,7 +276,7 @@ do_install() {
     [ -n "$ver" ] || ver="unknown"
     manifest_set "$name" "$ver" "$dir"
     rm -f "$tmp"
-    log_event "Installed ${name} v${ver} -> ${dest} (client: ${CLIENT_NAME:-n/a})"
+    log_event "Installed ${name} v${ver} -> ${dest}"
     ok "Installed ${C_BOLD}${name}${C_RESET} v${ver} -> ${dest}"
     return 0
 }
@@ -298,7 +298,7 @@ do_remove() {
         sudo rm -f "$dest"
     fi
     manifest_del "$name"
-    log_event "Removed ${name} (client: ${CLIENT_NAME:-n/a})"
+    log_event "Removed ${name}"
     ok "Removed ${C_BOLD}${name}${C_RESET}."
 }
 
@@ -338,7 +338,7 @@ run_script() {
     else
         warn "${name} exited with code ${rc}."
     fi
-    log_event "Ran ${name} (exit ${rc}, client: ${CLIENT_NAME:-n/a})"
+    log_event "Ran ${name} (exit ${rc})"
 }
 
 # -----------------------------------------------------------------------------
@@ -449,46 +449,6 @@ print_header() {
     printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_V" "$(center_pad "Manager v${VERSION} · ${REPO} (${BRANCH})" "$w")" "$B_V" "$C_RESET"
     printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_BL" "$(rep "$B_H" "$w")" "$B_BR" "$C_RESET"
     printf '\n'
-}
-
-system_header() {
-    local os host kernel user w=58
-    os="$(uname -s 2>/dev/null || echo unknown)"
-    host="$(hostname 2>/dev/null || echo unknown)"
-    kernel="$(uname -r 2>/dev/null || echo unknown)"
-    user="$(id -un 2>/dev/null || echo unknown)"
-
-    printf '\n'
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_TL" "$(rep "$B_H" "$w")" "$B_TR" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "System" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "Host   : ${host}" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "OS     : ${os}" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "Kernel : ${kernel}" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "User   : ${user}" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_BL" "$(rep "$B_H" "$w")" "$B_BR" "$C_RESET"
-    printf '\n'
-}
-
-client_gate() {
-    # Ask for the client name to justify elevated (sudo) usage.
-    # Empty / cancelled -> exit; filled -> proceed.
-    local client
-    printf '\n'
-    printf '  %s\n' "${C_YELLOW}Some actions require elevated privileges (sudo).${C_RESET}"
-    printf '  %s\n' "${C_DIM}Please identify the client this session is for.${C_RESET}"
-    printf '  %s' "${C_BOLD}Client:${C_RESET} "
-    read -r client || { printf '\n'; return 1; }
-    client="$(printf '%s' "$client" | tr -d '[:space:]')"
-    if [ -z "$client" ]; then
-        printf '\n'
-        warn "No client provided. Exiting."
-        return 1
-    fi
-    CLIENT_NAME="$client"
-    log_event "Session started for client: ${client}"
-    ok "Welcome, ${C_BOLD}${client}${C_RESET}."
-    printf '\n'
-    return 0
 }
 
 status_of() {
@@ -689,8 +649,6 @@ menu_remove_gum() {
 }
 
 interactive_menu() {
-    system_header
-    client_gate || return 1
     print_header
     self_update_check
     load_scripts || return 1

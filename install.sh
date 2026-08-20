@@ -4,7 +4,7 @@
 # DevOps Utilities - Generic Installer
 #
 # Maintainer: Inova e-Business
-# Version: 1.0
+# Version: 1.1
 #
 # Purpose:
 #   Download and install any script from the Inova e-Business DevOps Utilities
@@ -22,7 +22,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh /opt/scripts
 #
 # Notes:
-#   - Requires root privileges to write into system directories.
+#   - The download happens as the current user; only the final install step is
+#     run with sudo (which may prompt for your password).
 #   - The script name must exist in the repository (a *.sh file).
 # ==============================================================================
 
@@ -46,12 +47,6 @@ fi
 SCRIPT_URL="${BASE_URL}/${SCRIPT_NAME}"
 DEST="${INSTALL_DIR}/${SCRIPT_NAME}"
 
-if [ "$(id -u)" -ne 0 ]; then
-    echo "Error: this installer needs root privileges." >&2
-    echo "Re-run with sudo." >&2
-    exit 1
-fi
-
 echo "Downloading ${SCRIPT_URL} ..."
 TMP_FILE="$(mktemp)"
 curl -fsSL "${SCRIPT_URL}" -o "${TMP_FILE}"
@@ -65,7 +60,11 @@ else
 fi
 
 echo "Installing to ${DEST} (permissions ${PERMISSIONS}) ..."
-install -m "${PERMISSIONS}" "${TMP_FILE}" "${DEST}"
+if [ "$(id -u)" -eq 0 ]; then
+    install -m "${PERMISSIONS}" "${TMP_FILE}" "${DEST}"
+else
+    sudo install -m "${PERMISSIONS}" "${TMP_FILE}" "${DEST}"
+fi
 rm -f "${TMP_FILE}"
 
 echo "Done: ${DEST}"

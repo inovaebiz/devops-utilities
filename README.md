@@ -64,8 +64,9 @@ Ou instale em um diretório customizado:
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh /opt/scripts
 ```
 
-> ⚠️ O instalador exige privilégios de root (rode com `sudo` quando necessário).
-> Sempre revise o conteúdo do script antes de executá-lo.
+> ℹ️ O download é feito como usuário normal; apenas a instalação final usa
+> `sudo` (que pode pedir sua senha). Sempre revise o conteúdo do script antes
+> de executá-lo.
 
 ## 📦 Scripts disponíveis
 

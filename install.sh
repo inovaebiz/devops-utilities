@@ -38,7 +38,7 @@
 
 set -uo pipefail
 
-VERSION="2.2"
+VERSION="2.3"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -50,6 +50,7 @@ PERMISSIONS="750"
 
 STATE_DIR="${HOME}/.inova-devops"
 MANIFEST="${STATE_DIR}/manifest"
+LOG_FILE="${STATE_DIR}/manager.log"
 
 # Script data (populated by load_scripts)
 SCRIPTS_ARR=()
@@ -101,6 +102,11 @@ info()  { printf '  %s[i]%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }
 ok()    { printf '  %s%s%s %s\n' "$C_GREEN" "$TICK" "$C_RESET" "$*"; }
 warn()  { printf '  %s[!]%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 err()   { printf '  %s[!]%s %s\n' "$C_RED" "$C_RESET" "$*"; }
+
+log_event() {
+    manifest_init
+    printf '%s\n' "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG_FILE"
+}
 
 rep() { local c="$1" n="$2" i s=""; for ((i=0;i<n;i++)); do s+="$c"; done; printf '%s' "$s"; }
 
@@ -268,6 +274,7 @@ do_install() {
     [ -n "$ver" ] || ver="unknown"
     manifest_set "$name" "$ver" "$dir"
     rm -f "$tmp"
+    log_event "Installed ${name} v${ver} -> ${dest} (client: ${CLIENT_NAME:-n/a})"
     ok "Installed ${C_BOLD}${name}${C_RESET} v${ver} -> ${dest}"
     return 0
 }
@@ -289,6 +296,7 @@ do_remove() {
         sudo rm -f "$dest"
     fi
     manifest_del "$name"
+    log_event "Removed ${name} (client: ${CLIENT_NAME:-n/a})"
     ok "Removed ${C_BOLD}${name}${C_RESET}."
 }
 
@@ -316,17 +324,19 @@ run_script() {
     info "Running ${C_BOLD}${dest}${C_RESET} ..."
     printf '\n'
     if [ "$(id -u)" -eq 0 ]; then
-        "$dest"
+        "$dest" 2>&1 | tee -a "$LOG_FILE"
+        rc=${PIPESTATUS[0]}
     else
-        sudo "$dest"
+        sudo "$dest" 2>&1 | tee -a "$LOG_FILE"
+        rc=${PIPESTATUS[0]}
     fi
-    rc=$?
     printf '\n'
     if [ "$rc" -eq 0 ]; then
         ok "Finished ${name}."
     else
         warn "${name} exited with code ${rc}."
     fi
+    log_event "Ran ${name} (exit ${rc}, client: ${CLIENT_NAME:-n/a})"
 }
 
 # -----------------------------------------------------------------------------
@@ -439,6 +449,46 @@ print_header() {
     printf '\n'
 }
 
+system_header() {
+    local os host kernel user w=58
+    os="$(uname -s 2>/dev/null || echo unknown)"
+    host="$(hostname 2>/dev/null || echo unknown)"
+    kernel="$(uname -r 2>/dev/null || echo unknown)"
+    user="$(id -un 2>/dev/null || echo unknown)"
+
+    printf '\n'
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_TL" "$(rep "$B_H" "$w")" "$B_TR" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "System" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "Host   : ${host}" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "OS     : ${os}" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "Kernel : ${kernel}" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_V" "$(center_pad "User   : ${user}" "$w")" "$B_V" "$C_RESET"
+    printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_BL" "$(rep "$B_H" "$w")" "$B_BR" "$C_RESET"
+    printf '\n'
+}
+
+client_gate() {
+    # Ask for the client name to justify elevated (sudo) usage.
+    # Empty / cancelled -> exit; filled -> proceed.
+    local client
+    printf '\n'
+    printf '  %s\n' "${C_YELLOW}Some actions require elevated privileges (sudo).${C_RESET}"
+    printf '  %s\n' "${C_DIM}Please identify the client this session is for.${C_RESET}"
+    printf '  %s' "${C_BOLD}Client:${C_RESET} "
+    read -r client || { printf '\n'; return 1; }
+    client="$(printf '%s' "$client" | tr -d '[:space:]')"
+    if [ -z "$client" ]; then
+        printf '\n'
+        warn "No client provided. Exiting."
+        return 1
+    fi
+    CLIENT_NAME="$client"
+    log_event "Session started for client: ${client}"
+    ok "Welcome, ${C_BOLD}${client}${C_RESET}."
+    printf '\n'
+    return 0
+}
+
 status_of() {
     local installed="$1" lv="$2" rv="$3"
     if [ "$installed" = 0 ]; then
@@ -493,12 +543,12 @@ load_scripts() {
 }
 
 print_table() {
-    local sel="${1:-0}" i lv rv installed desc st stc num
+    local sel="${1:-0}" i lv rv installed desc st stc
     local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16 W_DESC=72
 
-    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
+    printf '  %*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "#" "$W_NAME" "SCRIPT" "$W_LOCAL" "LOCAL" "$W_REMOTE" "REMOTE" "$W_STATUS" "STATUS"
-    printf '  %-*s %-*s %-*s %-*s %-*s\n' \
+    printf '  %*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "---" "$W_NAME" "------------------------" "$W_LOCAL" "--------" "$W_REMOTE" "--------" "$W_STATUS" "----------------"
 
     for ((i=1; i<=SCRIPT_COUNT; i++)); do
@@ -509,17 +559,20 @@ print_table() {
         st="$(status_of "$installed" "$lv" "$rv")"
         stc="$(status_color "$st")"
 
+        # Cursor (1 char) + space + right-aligned number (2 chars) => fixed 4 chars, ASCII only
+        local cur numtxt numcol
         if [ "$sel" = "$i" ]; then
-            num="${C_CYAN}${ARROW}${i}${C_RESET}"
+            cur=">"; numcol="$C_CYAN"
         else
-            num="${C_DIM}${i}${C_RESET}"
+            cur=" "; numcol="$C_DIM"
         fi
+        numtxt="$(printf '%2d' "$i")"
 
-        printf '  %-*s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
-            "$W_NUM" "$num" \
+        printf '  %s%s %s%s%s %s%-*s%s %-*s %-*s %s%-*s%s\n' \
+            "$numcol" "$cur" "$numcol" "$numtxt" "$C_RESET" \
             "$C_BOLD" "$W_NAME" "${SCRIPTS_ARR[$i-1]}" "$C_RESET" \
-            "$W_LOCAL" "${lv:-—}" \
-            "$W_REMOTE" "${rv:-—}" \
+            "$W_LOCAL" "${lv:--}" \
+            "$W_REMOTE" "${rv:--}" \
             "$stc" "$W_STATUS" "$st" "$C_RESET"
 
         if [ -n "$desc" ]; then
@@ -559,6 +612,15 @@ render_menu() {
     printf '  %s' "${C_BOLD}>${C_RESET} "
 }
 
+# After running an action, wait for the user to go back to the menu without
+# immediately re-rendering the header/table (keeps the action output on screen).
+back_to_menu() {
+    printf '\n'
+    printf '  %s\n' "${C_DIM}────────────────────────────────────────────────────────${C_RESET}"
+    printf '  %s' "${C_BOLD}Press Enter to return to the menu${C_RESET} "
+    read -r _
+}
+
 arrow_menu() {
     local sel=1 key
     while true; do
@@ -572,9 +634,10 @@ arrow_menu() {
                 run_script "$(script_at "$sel")"
                 load_scripts
                 sel=1
+                back_to_menu
                 ;;
-            a|A) printf '\n'; menu_update_all; load_scripts ;;
-            r|R) printf '\n'; do_remove "$(script_at "$sel")"; load_scripts ;;
+            a|A) printf '\n'; menu_update_all; load_scripts; back_to_menu ;;
+            r|R) printf '\n'; do_remove "$(script_at "$sel")"; load_scripts; back_to_menu ;;
             l|L) load_scripts ;;
             q|Q|ESC) return 1 ;;
         esac
@@ -590,10 +653,10 @@ gum_menu() {
         choice="$(printf '%s\n' "${opts[@]}" | gum choose --height 15 --header "DevOps Utilities · select a script to run")"
         case "$choice" in
             "") return 1 ;;
-            "Update all installed") menu_update_all; load_scripts ;;
+            "Update all installed") menu_update_all; load_scripts; back_to_menu ;;
             "Remove a script") menu_remove_gum ;;
             "Quit") return 1 ;;
-            *) printf '\n'; run_script "$choice"; load_scripts ;;
+            *) printf '\n'; run_script "$choice"; load_scripts; back_to_menu ;;
         esac
     done
 }
@@ -624,6 +687,8 @@ menu_remove_gum() {
 }
 
 interactive_menu() {
+    system_header
+    client_gate || return 1
     print_header
     self_update_check
     load_scripts || return 1

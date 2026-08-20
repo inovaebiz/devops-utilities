@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.4
+# Version: 2.5
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -38,7 +38,7 @@
 
 set -uo pipefail
 
-VERSION="2.4"
+VERSION="2.5"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"

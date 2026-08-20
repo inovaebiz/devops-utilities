@@ -44,9 +44,33 @@ trabalho de outras equipes.
 
 ## 🚀 Instalação
 
-Cada script deste repositório pode ser baixado e instalado com as permissões
-corretas em uma única linha, usando o instalador genérico
-[`install.sh`](./install.sh):
+Este repositório usa um **gerenciador** (`install.sh`) que instala, rastreia,
+atualiza e remove os scripts, além de informar quais estão desatualizados em
+relação ao repositório.
+
+### Instalando o gerenciador
+
+Baixe o gerenciador e execute o menu interativo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o install.sh
+bash install.sh
+```
+
+### Comandos do gerenciador
+
+```bash
+bash install.sh list                    # lista scripts + status/versões
+bash install.sh install docker-cleanup.sh
+bash install.sh update                  # atualiza todos os instalados
+bash install.sh update threat-scan.sh   # atualiza um script
+bash install.sh remove threat-scan.sh
+```
+
+### Instalação direta (sem menu)
+
+Você também pode baixar e instalar um script em uma única linha, sem o
+gerenciador:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- <script> [diretorio]
@@ -75,7 +99,7 @@ curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/ins
 | [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL ...main/install.sh \| bash -s -- docker-cleanup.sh` |
 | [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | `curl -fsSL ...main/install.sh \| bash -s -- sys-update-checker.sh` |
 | [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, cron, usuários, arquivos, kernel). | `curl -fsSL ...main/install.sh \| bash -s -- threat-scan.sh` |
-| [`install.sh`](./install.sh) | Instalador genérico que baixa qualquer script do repositório com as permissões corretas. | — |
+| [`install.sh`](./install.sh) | Gerenciador/instalador: baixa, rastreia versões, atualiza e remove os scripts, com menu interativo e comandos de linha. | — |
 
 ## ⚖️ Aviso legal
 

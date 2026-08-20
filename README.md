@@ -48,13 +48,13 @@ Este repositório usa um **gerenciador** (`install.sh`) que instala, rastreia,
 atualiza e remove os scripts, além de informar quais estão desatualizados em
 relação ao repositório.
 
-### Instalando o gerenciador
+### Menu interativo
 
-Baixe e execute o menu interativo em uma única linha (o `sudo` já cobre a
-instalação, sem erro de permissão):
+Baixe o gerenciador e abra o menu:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o /tmp/install.sh && sudo bash /tmp/install.sh
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o /tmp/install.sh
+sudo bash /tmp/install.sh
 ```
 
 ### Comandos do gerenciador
@@ -74,8 +74,7 @@ sudo bash /tmp/install.sh self-update             # atualiza o próprio gerencia
 
 ### Instalação direta (sem menu)
 
-Você também pode baixar e instalar um script em uma única linha, sem o
-gerenciador (o `sudo` vai antes do `bash`, nunca antes do `curl`):
+Para baixar e instalar um script em uma única linha:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- <script> [diretorio]
@@ -93,17 +92,16 @@ Ou instale em um diretório customizado:
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- docker-cleanup.sh /opt/scripts
 ```
 
-> ℹ️ O download é feito como usuário normal; apenas a instalação final usa
-> `sudo` (que pode pedir sua senha). Sempre revise o conteúdo do script antes
-> de executá-lo.
+> ℹ️ Os scripts são instalados em `/usr/local/sbin` (que exige privilégios de
+> root, daí o `sudo`). Sempre revise o conteúdo antes de executar.
 
 ## 📦 Scripts disponíveis
 
 | Script | Descrição | Instalação |
 | --- | --- | --- |
-| [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL ...main/install.sh \| bash -s -- docker-cleanup.sh` |
-| [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | `curl -fsSL ...main/install.sh \| bash -s -- sys-update-checker.sh` |
-| [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, cron, usuários, arquivos, kernel). | `curl -fsSL ...main/install.sh \| bash -s -- threat-scan.sh` |
+| [`docker-cleanup.sh`](./docker-cleanup.sh) | Limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- docker-cleanup.sh` |
+| [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- sys-update-checker.sh` |
+| [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, cron, usuários, arquivos, kernel). | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- threat-scan.sh` |
 | [`install.sh`](./install.sh) | Gerenciador/instalador: baixa, rastreia versões, atualiza e remove os scripts, com menu interativo e comandos de linha. | — |
 
 ## ⚖️ Aviso legal

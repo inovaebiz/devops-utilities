@@ -27,11 +27,36 @@ DevOps utilizados internamente pela **Inova e-Business**. Ele é disponibilizado
 publicamente com o objetivo de compartilhar boas práticas e facilitar o
 trabalho de outras equipes.
 
+## Instalação
+
+Cada script deste repositório pode ser baixado e instalado com as permissões
+corretas em uma única linha, usando o instalador genérico [`install.sh`](./install.sh):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- <script> [diretorio]
+```
+
+Exemplo com o `docker-cleanup.sh` (instala em `/usr/local/sbin` com `chmod 750`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh
+```
+
+Ou instale em um diretório customizado:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | bash -s -- docker-cleanup.sh /opt/scripts
+```
+
+> O instalador exige privilégios de root (rode com `sudo` quando necessário).
+> Sempre revise o conteúdo do script antes de executá-lo.
+
 ## Conteúdo
 
 | Arquivo | Descrição |
 | --- | --- |
 | [`docker-cleanup.sh`](./docker-cleanup.sh) | Script para limpeza automática de imagens, containers parados, redes não utilizadas e cache de build do Docker, preservando sempre os volumes. |
+| [`install.sh`](./install.sh) | Instalador genérico que baixa qualquer script do repositório com as permissões corretas. |
 
 ## Aviso legal
 

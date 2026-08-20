@@ -65,7 +65,12 @@ bash install.sh install docker-cleanup.sh
 bash install.sh update                  # atualiza todos os instalados
 bash install.sh update threat-scan.sh   # atualiza um script
 bash install.sh remove threat-scan.sh
+bash install.sh self-update             # atualiza o próprio gerenciador
 ```
+
+> O gerenciador detecta automaticamente quando há uma nova versão dele mesmo,
+> mostra a versão atual, a versão remota e as últimas mudanças (do git), e
+> pergunta se deseja atualizar.
 
 ### Instalação direta (sem menu)
 

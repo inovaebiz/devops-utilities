@@ -176,7 +176,7 @@ do_install() {
     fi
 
     info "Installing to ${C_CYAN}${dest}${C_RESET} (${PERMISSIONS}) ..."
-    if [ "$(id -u)" -eq 0 ]; then
+    if [ "$(id -u)" -eq 0 ] || [ -w "$(dirname "$dest")" ]; then
         install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed."; rm -f "$tmp"; return 1; }
     else
         sudo install -m "$PERMISSIONS" "$tmp" "$dest" || { err "Install failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
@@ -244,6 +244,89 @@ run_script() {
         ok "Finished ${name}."
     else
         warn "${name} exited with code ${rc}."
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Self-update
+# -----------------------------------------------------------------------------
+version_gt() {
+    # version_gt <a> <b> -> returns 0 if a > b
+    local a="$1" b="$2" first
+    [ "$a" = "$b" ] && return 1
+    first="$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -n1)"
+    [ "$first" = "$b" ] && return 0
+    return 1
+}
+
+ask() {
+    # ask "question" -> returns 0 for yes, 1 for no
+    local ans
+    printf '  %s' "${C_BOLD}$1 [y/N]${C_RESET} "
+    read -r ans
+    case "$ans" in
+        [yY]|[yY][eE][sS]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+self_changelog() {
+    local json
+    json="$(curl -fsSL "https://api.github.com/repos/${REPO}/commits?path=${SELF}&per_page=10" 2>/dev/null)" || return 1
+    if command -v jq >/dev/null 2>&1; then
+        echo "$json" | jq -r '.[].commit.message' | sed 's/^/    • /'
+    else
+        echo "$json" | grep -oE '"message": *"[^"]*"' \
+            | sed 's/"message": *"//; s/"$//' \
+            | sed 's/^/    • /'
+    fi
+}
+
+self_update() {
+    local me="${BASH_SOURCE[0]:-$0}" tmp
+    if [ ! -f "$me" ] || [ "$me" = "bash" ] || [ "$me" = "-bash" ]; then
+        warn "Running via pipe; cannot self-update in place."
+        info "Re-run the bootstrap command to get the latest version."
+        return 1
+    fi
+
+    tmp="$(mktemp)"
+    info "Downloading latest ${C_CYAN}${SELF}${C_RESET} ..."
+    curl -fsSL "${RAW_URL}/${SELF}" -o "$tmp" || { err "Download failed."; rm -f "$tmp"; return 1; }
+
+    if [ "$(id -u)" -eq 0 ] || [ -w "$(dirname "$me")" ]; then
+        install -m 750 "$tmp" "$me" || { err "Update failed."; rm -f "$tmp"; return 1; }
+    else
+        sudo install -m 750 "$tmp" "$me" || { err "Update failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
+    fi
+    rm -f "$tmp"
+    ok "Manager updated to the latest version."
+    info "Restart the manager to apply changes."
+}
+
+self_update_check() {
+    local remote_ver cl
+    remote_ver="$(remote_version "$SELF")"
+    [ -n "$remote_ver" ] || return 0
+    [ "$remote_ver" = "unknown" ] && return 0
+
+    if version_gt "$remote_ver" "$VERSION"; then
+        printf '\n'
+        printf '  %s\n' "${C_YELLOW}A new version of the manager is available!${C_RESET}"
+        printf '  %s\n' "    Current : v${VERSION}"
+        printf '  %s\n' "    Latest  : v${remote_ver}"
+        printf '\n'
+        cl="$(self_changelog 2>/dev/null || true)"
+        if [ -n "$cl" ]; then
+            printf '  %s\n' "${C_DIM}  Recent changes:${C_RESET}"
+            printf '%s\n' "$cl"
+            printf '\n'
+        fi
+        if ask "Update the manager now?"; then
+            self_update
+        else
+            warn "Keeping current version v${VERSION}."
+        fi
     fi
 }
 
@@ -353,6 +436,7 @@ menu_remove() {
 
 interactive_menu() {
     print_header
+    self_update_check
     render_list || return 1
     local keep=0
     while [ "$keep" -eq 0 ]; do
@@ -377,6 +461,7 @@ Usage:
   install.sh update                   update all installed scripts
   install.sh update <script>          update a specific script
   install.sh remove <script>          remove an installed script
+  install.sh self-update              update the manager itself
   install.sh <script>                 shortcut: install <script>
 
 Options:
@@ -393,7 +478,8 @@ CMD="${1:-}"
 
 case "$CMD" in
     ""|menu)       interactive_menu ;;
-    list|status)   print_header; render_list ;;
+    list|status)   print_header; self_update_check; render_list ;;
+    self-update)   self_update ;;
     install)       do_install "${2:-}" ;;
     update)
         if [ -n "${2:-}" ]; then

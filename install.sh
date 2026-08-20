@@ -4,12 +4,12 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.0
+# Version: 2.1
 #
 # Purpose:
-#   Install, track, update and remove the DevOps Utilities scripts from this
-#   repository. It knows which scripts are installed locally, their versions,
-#   and whether they need to be updated relative to the repository (git).
+#   Install, run, track, update and remove the DevOps Utilities scripts from
+#   this repository. It knows which scripts are installed locally, their
+#   versions, and whether they need to be updated relative to the repository.
 #
 # Usage:
 #   # Interactive menu
@@ -36,7 +36,7 @@
 
 set -uo pipefail
 
-VERSION="2.0"
+VERSION="2.1"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -48,6 +48,10 @@ PERMISSIONS="750"
 
 STATE_DIR="${HOME}/.inova-devops"
 MANIFEST="${STATE_DIR}/manifest"
+
+# Script list cache (populated by render_list / fetch)
+SCRIPTS_ARR=()
+SCRIPT_COUNT=0
 
 # -----------------------------------------------------------------------------
 # Colors (only when stdout is a terminal)
@@ -67,7 +71,6 @@ else
     C_YELLOW="" C_BLUE="" C_MAGENTA="" C_CYAN=""
 fi
 
-log()   { printf '%s\n' "$*"; }
 info()  { printf '  %s[INFO]%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }
 ok()    { printf '  %s[OK]%s   %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn()  { printf '  %s[WARN]%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
@@ -82,12 +85,10 @@ manifest_init() {
 }
 
 manifest_get() {
-    # manifest_get <script> -> prints "version|dir" or nothing
     grep -E "^${1}\|" "$MANIFEST" 2>/dev/null | head -n1 | cut -d'|' -f2-
 }
 
 manifest_set() {
-    # manifest_set <script> <version> <dir>
     manifest_init
     local tmp
     tmp="$(mktemp)"
@@ -120,14 +121,12 @@ fetch_script_list() {
 }
 
 extract_version() {
-    # extract_version <file> -> prints version string or "unknown"
     grep -m1 -E '^VERSION=' "$1" 2>/dev/null \
         | sed -E 's/^VERSION="?([^"]*)"?.*/\1/' \
         | tr -d '[:space:]'
 }
 
 remote_version() {
-    # remote_version <script> -> prints version or "unknown"
     local tmp
     tmp="$(mktemp)"
     if curl -fsSL "${RAW_URL}/${1}" -o "$tmp" 2>/dev/null; then
@@ -139,7 +138,6 @@ remote_version() {
 }
 
 local_version() {
-    # local_version <script> -> prints installed version or empty string
     local rec ver
     rec="$(manifest_get "$1")"
     if [ -n "$rec" ]; then
@@ -152,6 +150,11 @@ local_version() {
 
 is_installed() {
     manifest_get "$1" >/dev/null 2>&1
+}
+
+script_at() {
+    # script_at <n> -> prints the nth script name (1-based)
+    printf '%s\n' "${SCRIPTS_ARR[$(( $1 - 1 ))]}"
 }
 
 # -----------------------------------------------------------------------------
@@ -208,8 +211,7 @@ do_remove() {
 }
 
 do_update() {
-    local name="$1" ver_new ver_old
-    ver_old="$(local_version "$name")"
+    local name="$1"
     if is_installed "$name"; then
         info "Updating ${C_CYAN}${name}${C_RESET} ..."
     else
@@ -218,8 +220,35 @@ do_update() {
     do_install "$name"
 }
 
+run_script() {
+    local name="$1" rec dir dest rc
+    if ! is_installed "$name"; then
+        info "${C_BOLD}${name}${C_RESET} is not installed. Installing first ..."
+        do_install "$name" || return 1
+    fi
+    rec="$(manifest_get "$name")"
+    dir="$(echo "$rec" | cut -d'|' -f2)"
+    [ -n "$dir" ] || dir="$DEFAULT_INSTALL_DIR"
+    dest="${dir}/${name}"
+
+    info "Running ${C_BOLD}${dest}${C_RESET} ..."
+    printf '\n'
+    if [ "$(id -u)" -eq 0 ]; then
+        "$dest"
+    else
+        sudo "$dest"
+    fi
+    rc=$?
+    printf '\n'
+    if [ "$rc" -eq 0 ]; then
+        ok "Finished ${name}."
+    else
+        warn "${name} exited with code ${rc}."
+    fi
+}
+
 # -----------------------------------------------------------------------------
-# Listing / status
+# Rendering
 # -----------------------------------------------------------------------------
 print_header() {
     printf '\n  %s\n' "${C_BOLD}${C_MAGENTA}============================================================${C_RESET}"
@@ -229,42 +258,46 @@ print_header() {
     printf '\n'
 }
 
-list_status() {
-    local scripts name ver_local ver_remote status note
-    print_header
-
+render_list() {
+    local name ver_local ver_remote status i
     info "Fetching script list from repository ..."
-    scripts="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
-    [ -n "$scripts" ] || { warn "No scripts found in the repository."; return 0; }
+
+    local raw
+    raw="$(fetch_script_list)" || { err "Could not reach the repository."; return 1; }
+    [ -n "$raw" ] || { warn "No scripts found in the repository."; return 0; }
 
     printf '\n'
-    printf '  %-28s %-10s %-10s %s\n' "SCRIPT" "LOCAL" "REMOTE" "STATUS"
-    printf '  %-28s %-10s %-10s %s\n' "--------------------------" "--------" "--------" "----------------"
-    local line
+    printf '  %-3s %-24s %-8s %-8s %s\n' "#" "SCRIPT" "LOCAL" "REMOTE" "STATUS"
+    printf '  %-3s %-24s %-8s %-8s %s\n' "---" "------------------------" "--------" "--------" "----------------"
+
+    SCRIPTS_ARR=()
+    i=1
     while IFS= read -r name; do
         [ -n "$name" ] || continue
+        SCRIPTS_ARR+=("$name")
         ver_local="$(local_version "$name")"
         ver_remote="$(remote_version "$name")"
 
         if is_installed "$name"; then
             if [ "$ver_remote" != "unknown" ] && [ "$ver_local" != "$ver_remote" ]; then
                 status="${C_YELLOW}update available${C_RESET}"
-                note=""
             else
                 status="${C_GREEN}up to date${C_RESET}"
-                note=""
             fi
         else
             status="${C_DIM}not installed${C_RESET}"
-            note=""
         fi
 
-        printf '  %-28s %-10s %-10s %s\n' \
+        printf '  %-3s %-24s %-8s %-8s %s\n' \
+            "${C_DIM}${i}${C_RESET}" \
             "${C_BOLD}${name}${C_RESET}" \
             "${ver_local:-—}" \
             "${ver_remote:-—}" \
             "$status"
-    done <<< "$scripts"
+        i=$((i + 1))
+    done <<< "$raw"
+
+    SCRIPT_COUNT=$((i - 1))
     printf '\n'
 }
 
@@ -273,62 +306,50 @@ list_status() {
 # -----------------------------------------------------------------------------
 menu_prompt() {
     printf '\n'
-    printf '  %s\n' "${C_CYAN}Commands:${C_RESET}"
-    printf '  %s\n' "  [i] install    [u] update all    [r] remove    [l] list    [q] quit"
+    printf '  %s\n' "${C_CYAN}Pick a number to run (auto-installs if needed), or a command:${C_RESET}"
+    printf '  %s\n' "  [1-${SCRIPT_COUNT}] run    [a] update all    [r] remove    [l] refresh    [q] quit"
     printf '  %s' "${C_BOLD}>${C_RESET} "
     read -r choice
     case "$choice" in
-        i|I|install) menu_install ;;
-        u|U|update)  menu_update_all ;;
-        r|R|remove)  menu_remove ;;
-        l|L|list)    list_status ;;
         q|Q|quit|exit|"") return 1 ;;
-        *) warn "Unknown command. Try i, u, r, l or q." ;;
+        a|A) menu_update_all ;;
+        r|R) menu_remove ;;
+        l|L) render_list ;;
+        [0-9]*)
+            if [ "$choice" -ge 1 ] 2>/dev/null && [ "$choice" -le "$SCRIPT_COUNT" ] 2>/dev/null; then
+                run_script "$(script_at "$choice")"
+            else
+                warn "Invalid number: ${choice}"
+            fi
+            ;;
+        *) warn "Unknown command. Use a number, a, r, l or q." ;;
     esac
     return 0
 }
 
-menu_install() {
-    local scripts
-    scripts="$(fetch_script_list)" || { err "Could not reach the repository."; return; }
-    local name
-    printf '\n'
-    info "Available scripts:"
-    while IFS= read -r name; do
-        [ -n "$name" ] || continue
-        printf '    %s %s\n' "${C_BOLD}${name}${C_RESET}" "$(is_installed "$name" && echo "${C_GREEN}(installed)${C_RESET}")"
-    done <<< "$scripts"
-    printf '  %s' "${C_BOLD}Script to install:${C_RESET} "
-    read -r name
-    [ -n "$name" ] || return
-    if echo "$scripts" | grep -qx "$name"; then
-        do_install "$name"
-    else
-        err "Unknown script: ${name}"
-    fi
-}
-
 menu_update_all() {
-    local scripts name
-    scripts="$(fetch_script_list)" || { err "Could not reach the repository."; return; }
-    while IFS= read -r name; do
-        [ -n "$name" ] || continue
+    local name
+    for name in "${SCRIPTS_ARR[@]}"; do
         is_installed "$name" && do_update "$name"
-    done <<< "$scripts"
+    done
     ok "Update pass completed."
+    render_list
 }
 
 menu_remove() {
-    local name
-    printf '  %s' "${C_BOLD}Script to remove:${C_RESET} "
-    read -r name
-    [ -n "$name" ] || return
-    do_remove "$name"
+    local n
+    printf '  %s' "${C_BOLD}Script number to remove:${C_RESET} "
+    read -r n
+    if [ "$n" -ge 1 ] 2>/dev/null && [ "$n" -le "$SCRIPT_COUNT" ] 2>/dev/null; then
+        do_remove "$(script_at "$n")"
+    else
+        warn "Invalid number: ${n}"
+    fi
 }
 
 interactive_menu() {
     print_header
-    list_status
+    render_list || return 1
     local keep=0
     while [ "$keep" -eq 0 ]; do
         menu_prompt || keep=1
@@ -368,17 +389,16 @@ CMD="${1:-}"
 
 case "$CMD" in
     ""|menu)       interactive_menu ;;
-    list|status)   list_status ;;
+    list|status)   print_header; render_list ;;
     install)       do_install "${2:-}" ;;
     update)
         if [ -n "${2:-}" ]; then
             do_update "$2"
         else
-            scripts="$(fetch_script_list)" || { err "Could not reach the repository."; exit 1; }
-            while IFS= read -r name; do
-                [ -n "$name" ] || continue
+            render_list
+            for name in "${SCRIPTS_ARR[@]}"; do
                 is_installed "$name" && do_update "$name"
-            done <<< "$scripts"
+            done
             ok "Update pass completed."
         fi
         ;;

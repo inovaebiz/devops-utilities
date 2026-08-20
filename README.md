@@ -4,9 +4,21 @@
     Conjunto de utilitários e scripts de DevOps mantidos pela
     <strong>Inova e-Business</strong>.
   </p>
+  <p align="center">
+    <a href="https://github.com/inovaebiz/devops-utilities/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/inovaebiz/devops-utilities"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities"><img alt="GitHub repo stars" src="https://img.shields.io/github/stars/inovaebiz/devops-utilities"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/inovaebiz/devops-utilities"></a>
+    <a href="https://github.com/inovaebiz/devops-utilities/pulls"><img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/inovaebiz/devops-utilities"></a>
+  </p>
 </p>
 
 ---
+
+## Requisitos
+
+- **Linux** (ou ambiente compatível com `systemd` para os scripts de serviço)
+- **Docker** instalado e em execução
+- **Bash** 4+
 
 ## Sobre o projeto
 
@@ -45,8 +57,7 @@ Este é um projeto público e colaborações são bem-vindas. Para contribuir:
 
 ## Licença
 
-Distribuído de acordo com a política de uso da **Inova e-Business**.
-Consulte o time responsável para mais informações.
+Distribuído sob a licença [MIT](./LICENSE).
 
 ---
 

@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.9
+# Version: 2.10
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -47,7 +47,7 @@
 
 set -uo pipefail
 
-VERSION="2.9"
+VERSION="2.10"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -147,8 +147,20 @@ _spin() {
 # State / manifest helpers
 # -----------------------------------------------------------------------------
 manifest_init() {
-    [ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR"
-    [ -f "$MANIFEST" ] || : > "$MANIFEST"
+    [ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR" 2>/dev/null || sudo -n mkdir -p "$STATE_DIR" 2>/dev/null || true
+    [ -f "$MANIFEST" ] || : > "$MANIFEST" 2>/dev/null || sudo -n touch "$MANIFEST" 2>/dev/null || true
+    # Fix ownership if STATE_DIR was created via sudo (root-owned) — non-interactive
+    if [ ! -w "$STATE_DIR" ] || { [ -f "$MANIFEST" ] && [ ! -w "$MANIFEST" ]; }; then
+        local u="${SUDO_USER:-$(id -un)}"
+        sudo -n chown -R "$u" "$STATE_DIR" 2>/dev/null || chown -R "$u" "$STATE_DIR" 2>/dev/null || true
+        sudo -n chmod -R u+rw "$STATE_DIR" 2>/dev/null || chmod -R u+rw "$STATE_DIR" 2>/dev/null || true
+    fi
+    [ -f "$LOG_FILE" ] || : > "$LOG_FILE" 2>/dev/null || true
+    if [ -f "$LOG_FILE" ] && [ ! -w "$LOG_FILE" ]; then
+        local u="${SUDO_USER:-$(id -un)}"
+        sudo -n chown "$u" "$LOG_FILE" 2>/dev/null || true
+        sudo -n chmod u+rw "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 manifest_get() {

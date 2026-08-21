@@ -359,7 +359,14 @@ install_cli() {
     local target="${1:-/usr/local/bin/inovatils}" tmp
     tmp="$(mktemp)"
     info "Installing ${C_CYAN}${target}${C_RESET} ..."
-    if ! curl -fsSL "${RAW_URL}/inovatils" -o "$tmp" 2>/dev/null; then
+    # Prefer a local copy next to this script (avoids CDN cache on fresh pushes)
+    local src_dir src_file=""
+    src_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
+    [ -n "$src_dir" ] && [ -f "${src_dir}/inovatils" ] && src_file="${src_dir}/inovatils"
+    if [ -n "$src_file" ]; then
+        cp "$src_file" "$tmp" 2>/dev/null || true
+    fi
+    if [ ! -s "$tmp" ] && ! curl -fsSL "${RAW_URL}/inovatils" -o "$tmp" 2>/dev/null; then
         err "Failed to download inovatils from ${RAW_URL}/inovatils"
         rm -f "$tmp"
         return 1

@@ -55,7 +55,9 @@ Instale o comando global (uma única vez):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- inovatils
-# ou, se você já baixou o install.sh:
+```
+ou, se você já baixou o install.sh:
+```bash
 sudo bash install.sh inovatils
 ```
 

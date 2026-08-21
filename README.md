@@ -46,9 +46,34 @@ trabalho de outras equipes.
 
 Este repositório usa um **gerenciador** (`install.sh`) que instala, rastreia,
 atualiza e remove os scripts, além de informar quais estão desatualizados em
-relação ao repositório.
+relação ao repositório. Depois da primeira instalação, use o comando global
+**`inovatils`** — chamável de qualquer diretório.
 
-### Menu interativo
+### Comando global `inovatils`
+
+Instale o comando global (uma única vez):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh | sudo bash -s -- inovatils
+# ou, se você já baixou o install.sh:
+sudo bash install.sh inovatils
+```
+
+Depois, use `inovatils` de qualquer lugar:
+
+```bash
+inovatils                  # abre o menu interativo
+inovatils list             # lista scripts + status/versões
+inovatils update           # atualiza todos os instalados
+inovatils self-update      # atualiza o próprio inovatils + gerenciador
+inovatils --help
+```
+
+> `inovatils` é um wrapper fino instalado em `/usr/local/bin/inovatils`;
+> o gerenciador em si fica em `~/.inova-devops/install.sh` e é atualizado
+> junto com `self-update`. Funciona em Linux, macOS e Windows (Git Bash/MSYS2/WSL).
+
+### Menu interativo (sem o comando global)
 
 Baixe o gerenciador e abra o menu:
 
@@ -61,11 +86,13 @@ sudo bash /tmp/install.sh
 
 ```bash
 sudo bash /tmp/install.sh list                    # lista scripts + status/versões
+inovatils list                                     # idem via comando global
 sudo bash /tmp/install.sh install docker-cleanup.sh
 sudo bash /tmp/install.sh update                  # atualiza todos os instalados
 sudo bash /tmp/install.sh update threat-scan.sh   # atualiza um script
 sudo bash /tmp/install.sh remove threat-scan.sh
 sudo bash /tmp/install.sh self-update             # atualiza o próprio gerenciador
+inovatils self-update                              # atualiza gerenciador + comando global
 ```
 
 > O gerenciador detecta automaticamente quando há uma nova versão dele mesmo,
@@ -103,6 +130,7 @@ curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/ins
 | [`sys-update-checker.sh`](./sys-update-checker.sh) | Analisa pacotes, kernel e serviços que precisam de atualização e aplica as atualizações de forma segura após aceite (modo interativo ou `--yes`). | Linux · macOS · Windows | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- sys-update-checker.sh` |
 | [`threat-scan.sh`](./threat-scan.sh) | Varredura somente-leitura que identifica indícios de vírus, worms, malwares, mineradores, backdoors e persistências suspeitas (processos, rede, agendamentos, usuários, arquivos, kernel). | Linux · macOS · Windows | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- threat-scan.sh` |
 | [`install.sh`](./install.sh) | Gerenciador/instalador: baixa, rastreia versões, atualiza e remove os scripts, com menu interativo e comandos de linha. | Linux · macOS · Windows | — |
+| [`inovatils`](./inovatils) | Comando global (wrapper) para o gerenciador — chamável de qualquer diretório (`inovatils list`, `inovatils update`, ...). | Linux · macOS · Windows | `curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh \| sudo bash -s -- inovatils` |
 
 ## ⚖️ Aviso legal
 

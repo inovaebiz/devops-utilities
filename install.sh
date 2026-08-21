@@ -4,16 +4,18 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.7
+# Version: 2.8
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
 #   this repository. It knows which scripts are installed locally, their
 #   versions, and whether they need to be updated relative to the repository.
+#   Also installs the global CLI `inovatils` (callable from anywhere).
 #
 # Usage:
 #   # Interactive menu
 #   install.sh
+#   inovatils                            # same menu via the global command
 #
 #   # Non-interactive commands
 #   install.sh list                      # list all scripts and their status
@@ -22,7 +24,12 @@
 #   install.sh update                    # update all installed scripts
 #   install.sh update <script>           # update a specific script
 #   install.sh remove <script>           # remove an installed script
+#   install.sh inovatils                 # install the global `inovatils` command
 #   install.sh <script>                  # shortcut: install <script>
+#
+# Global CLI (after `install.sh inovatils`):
+#   inovatils                            # interactive menu
+#   inovatils list | update | remove ... # same commands as install.sh
 #
 # Bootstrap (download the manager itself):
 #   curl -fsSL https://raw.githubusercontent.com/inovaebiz/devops-utilities/main/install.sh -o install.sh
@@ -34,11 +41,13 @@
 #   - Installed scripts and their versions are tracked in a local manifest.
 #   - The interactive menu uses arrow-key navigation. If `gum` is installed it
 #     is used automatically for a nicer experience.
+#   - The global `inovatils` command is a thin wrapper installed to
+#     /usr/local/bin/inovatils; the manager itself lives in ~/.inova-devops.
 # ==============================================================================
 
 set -uo pipefail
 
-VERSION="2.7"
+VERSION="2.8"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -341,6 +350,35 @@ run_script() {
         warn "${name} exited with code ${rc}."
     fi
     log_event "Ran ${name} (exit ${rc})"
+}
+
+# -----------------------------------------------------------------------------
+# Global CLI (inovatils) helpers
+# -----------------------------------------------------------------------------
+install_cli() {
+    local target="${1:-/usr/local/bin/inovatils}" tmp
+    tmp="$(mktemp)"
+    info "Installing ${C_CYAN}${target}${C_RESET} ..."
+    if ! curl -fsSL "${RAW_URL}/inovatils" -o "$tmp" 2>/dev/null; then
+        err "Failed to download inovatils from ${RAW_URL}/inovatils"
+        rm -f "$tmp"
+        return 1
+    fi
+    if ! head -n1 "$tmp" | grep -q '^#!/'; then
+        err "Downloaded file does not look like a shell script."
+        rm -f "$tmp"
+        return 1
+    fi
+    if mkdir -p "$(dirname "$target")" 2>/dev/null && [ -w "$(dirname "$target")" ]; then
+        cp "$tmp" "$target" && chmod 755 "$target" || { err "Install failed."; rm -f "$tmp"; return 1; }
+    else
+        sudo mkdir -p "$(dirname "$target")" 2>/dev/null
+        sudo cp "$tmp" "$target" && sudo chmod 755 "$target" || { err "Install failed (sudo may need your password)."; rm -f "$tmp"; return 1; }
+    fi
+    rm -f "$tmp"
+    ok "Installed ${C_BOLD}inovatils${C_RESET} -> ${target}"
+    info "Run ${C_BOLD}inovatils${C_RESET} from anywhere."
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -720,9 +758,11 @@ interactive_menu() {
 usage() {
     cat <<EOF
 Inova e-Business · DevOps Utilities Manager (v${VERSION})
+  Global CLI: inovatils (callable from anywhere after install)
 
 Usage:
   install.sh                          interactive menu
+  inovatils                           interactive menu (global command)
   install.sh list                     list scripts and their status
   install.sh status                   alias for "list"
   install.sh install <script>         install a script
@@ -730,7 +770,10 @@ Usage:
   install.sh update <script>          update a specific script
   install.sh remove <script>          remove an installed script
   install.sh self-update              update the manager itself
+  install.sh inovatils                install the global \`inovatils\` command
   install.sh <script>                 shortcut: install <script>
+
+  inovatils list | update | remove ...   same commands via the global CLI
 
 Options:
   -h, --help                          show this help
@@ -748,6 +791,7 @@ case "$CMD" in
     ""|menu)       interactive_menu ;;
     list|status)   print_header; self_update_check; load_scripts; print_table 0 1 ;;
     self-update)   self_update ;;
+    inovatils|cli|install-cli) install_cli "${2:-/usr/local/bin/inovatils}" ;;
     install)       do_install "${2:-}" "${3:-}" ;;
     update)
         if [ -n "${2:-}" ]; then

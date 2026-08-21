@@ -4,7 +4,7 @@
 # DevOps Utilities - Installer & Manager
 #
 # Maintainer: Inova e-Business
-# Version: 2.8
+# Version: 2.9
 #
 # Purpose:
 #   Install, run, track, update and remove the DevOps Utilities scripts from
@@ -47,7 +47,7 @@
 
 set -uo pipefail
 
-VERSION="2.8"
+VERSION="2.9"
 
 REPO="inovaebiz/devops-utilities"
 BRANCH="main"
@@ -489,13 +489,10 @@ self_update_check() {
 # Rendering
 # -----------------------------------------------------------------------------
 print_header() {
-    local w=58
-    printf '\n'
-    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_TL" "$(rep "$B_H" "$w")" "$B_TR" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_V" "$(center_pad "Inova e-Business · DevOps Utilities" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_V" "$(center_pad "Manager v${VERSION} · ${REPO} (${BRANCH})" "$w")" "$B_V" "$C_RESET"
-    printf '  %s%s%s%s%s\n' "$C_MAGENTA" "$B_BL" "$(rep "$B_H" "$w")" "$B_BR" "$C_RESET"
-    printf '\n'
+    # Compact header (2 lines) — keeps more room for the table/details
+    printf '  %s%s Inova DevOps Utilities%s — Manager v%s · %s\n' \
+        "$C_MAGENTA" "$ARROW" "$C_RESET" "$VERSION" "$REPO"
+    printf '  %s%s%s\n' "$C_DIM" "$(rep "$B_H" 54)" "$C_RESET"
 }
 
 status_of() {
@@ -552,15 +549,27 @@ load_scripts() {
 }
 
 print_table() {
-    local sel="${1:-0}" show_desc="${2:-0}" i lv rv installed desc st stc
+    local sel="${1:-0}" show_desc="${2:-0}" offset="${3:-0}" i lv rv installed desc st stc
     local W_NUM=4 W_NAME=24 W_LOCAL=8 W_REMOTE=8 W_STATUS=16 W_DESC=72
+    local VISIBLE=6
 
     printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "#" "$W_NAME" "SCRIPT" "$W_LOCAL" "LOCAL" "$W_REMOTE" "REMOTE" "$W_STATUS" "STATUS"
     printf '  %-*s %-*s %-*s %-*s %-*s\n' \
         "$W_NUM" "---" "$W_NAME" "------------------------" "$W_LOCAL" "--------" "$W_REMOTE" "--------" "$W_STATUS" "----------------"
 
+    # Scroll indicators (menu mode only)
+    if [ "$show_desc" = 0 ] && [ "$offset" -gt 0 ]; then
+        printf '  %s↑ %d more above%s\n' "$C_DIM" "$offset" "$C_RESET"
+    fi
+
     for ((i=1; i<=SCRIPT_COUNT; i++)); do
+        # Window: only visible slice in menu mode
+        if [ "$show_desc" = 0 ]; then
+            if [ "$i" -le "$offset" ] || [ "$i" -gt $(( offset + VISIBLE )) ]; then
+                continue
+            fi
+        fi
         lv="${ARR_LOCAL[$i-1]}"
         rv="${ARR_REMOTE[$i-1]}"
         installed="${ARR_INSTALLED[$i-1]}"
@@ -597,11 +606,19 @@ print_table() {
             printf '%s\n' "$desc" | fold -s -w "$W_DESC" | sed 's/^/         /'
         fi
     done
+
+    if [ "$show_desc" = 0 ]; then
+        local remaining=$(( SCRIPT_COUNT - offset - VISIBLE ))
+        if [ "$remaining" -gt 0 ]; then
+            printf '  %s↓ %d more below%s\n' "$C_DIM" "$remaining" "$C_RESET"
+        fi
+    fi
 }
 
 # Detail panel for the currently selected script (interactive menu).
+# $2 = 1 to expand full description, 0 to show collapsed (2 lines).
 print_details() {
-    local sel="$1" name desc lv rv st CW=52 line
+    local sel="$1" expanded="${2:-0}" name desc lv rv st CW=52 line
     [ "$SCRIPT_COUNT" -gt 0 ] || return 0
     name="${SCRIPTS_ARR[$((sel-1))]}"
     desc="${ARR_DESC[$((sel-1))]}"
@@ -615,9 +632,21 @@ print_details() {
     printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "local: ${lv:-n/a}   remote: ${rv:-n/a}   status: ${st}" "$C_CYAN$B_V$C_RESET"
     if [ -n "$desc" ]; then
         printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "" "$C_CYAN$B_V$C_RESET"
+        local folded total shown=0
+        folded="$(printf '%s\n' "$desc" | fold -s -w "$CW")"
+        total="$(printf '%s\n' "$folded" | wc -l | tr -d ' ')"
         while IFS= read -r line; do
+            shown=$(( shown + 1 ))
+            if [ "$expanded" = 0 ] && [ "$shown" -gt 2 ]; then
+                local remaining=$(( total - 2 ))
+                printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "${C_DIM}… (+${remaining} more, press d to expand)${C_RESET}" "$C_CYAN$B_V$C_RESET"
+                break
+            fi
             printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "$line" "$C_CYAN$B_V$C_RESET"
-        done <<< "$(printf '%s\n' "$desc" | fold -s -w "$CW")"
+        done <<< "$folded"
+        if [ "$expanded" = 1 ] && [ "$total" -gt 2 ]; then
+            printf '  %s %-*s %s\n' "$C_CYAN$B_V$C_RESET" "$CW" "${C_DIM}(press d to collapse)${C_RESET}" "$C_CYAN$B_V$C_RESET"
+        fi
     fi
     printf '  %s%s%s%s%s\n' "$C_CYAN" "$B_BL" "$(rep "$B_H" "$(( CW + 2 ))")" "$B_BR" "$C_RESET"
 }
@@ -656,16 +685,18 @@ print_actions() {
         "$C_BOLD" "r" "$C_RESET" "remove the selected script"
     printf '  %s%-5s%s %-22s%s%-5s%s %-26s\n' \
         "$C_BOLD" "l" "$C_RESET" "reload the list" \
+        "$C_BOLD" "d" "$C_RESET" "expand/collapse details"
+    printf '  %s%-5s%s %-22s\n' \
         "$C_BOLD" "q" "$C_RESET" "quit"
     printf '\n'
 }
 
 render_menu() {
-    local sel="${1:-1}"
+    local sel="${1:-1}" offset="${2:-0}" expanded="${3:-0}"
     printf '\033[2J\033[H'
     print_header
-    print_table "$sel"
-    print_details "$sel"
+    print_table "$sel" 0 "$offset"
+    print_details "$sel" "$expanded"
     print_actions
     printf '  %s' "${C_BOLD}>${C_RESET} "
 }
@@ -680,23 +711,31 @@ back_to_menu() {
 }
 
 arrow_menu() {
-    local sel=1 key
+    local sel=1 offset=0 expanded=0 key VISIBLE=6
     while true; do
-        render_menu "$sel"
+        # Keep selected visible in the scroll window
+        if [ "$sel" -le "$offset" ]; then
+            offset=$(( sel - 1 ))
+        elif [ "$sel" -gt $(( offset + VISIBLE )) ]; then
+            offset=$(( sel - VISIBLE ))
+        fi
+        [ "$offset" -lt 0 ] && offset=0
+        render_menu "$sel" "$offset" "$expanded"
         key="$(read_key)"
         case "$key" in
-            UP)   sel=$(( sel > 1 ? sel - 1 : SCRIPT_COUNT )) ;;
-            DOWN) sel=$(( sel < SCRIPT_COUNT ? sel + 1 : 1 )) ;;
+            UP)   sel=$(( sel > 1 ? sel - 1 : SCRIPT_COUNT )); expanded=0 ;;
+            DOWN) sel=$(( sel < SCRIPT_COUNT ? sel + 1 : 1 )); expanded=0 ;;
+            d|D)  expanded=$(( 1 - expanded )) ;;
             ENTER)
                 printf '\n'
                 run_script "$(script_at "$sel")"
                 load_scripts
-                sel=1
+                sel=1; offset=0; expanded=0
                 back_to_menu
                 ;;
-            a|A) printf '\n'; menu_update_all; load_scripts; back_to_menu ;;
-            r|R) printf '\n'; do_remove "$(script_at "$sel")"; load_scripts; back_to_menu ;;
-            l|L) load_scripts ;;
+            a|A) printf '\n'; menu_update_all; load_scripts; expanded=0; back_to_menu ;;
+            r|R) printf '\n'; do_remove "$(script_at "$sel")"; load_scripts; expanded=0; back_to_menu ;;
+            l|L) load_scripts; expanded=0 ;;
             q|Q|ESC) return 1 ;;
         esac
     done

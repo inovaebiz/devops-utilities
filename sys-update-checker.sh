@@ -25,7 +25,7 @@
 
 set -uo pipefail
 
-VERSION="1.1"
+VERSION="1.2"
 TAG="sys-update"
 
 ASSUME_YES=0
@@ -171,8 +171,13 @@ ask() {
         return 0
     fi
     local answer
-    printf '  \033[1;36m[?]\033[0m %s [y/N] ' "$1"
-    read -r answer
+    printf '  \033[1;36m[?]\033[0m %s [y/N] ' "$1" > /dev/tty
+    # Read from /dev/tty so stdin can be used for piped lists
+    if [ -r /dev/tty ]; then
+        read -r answer < /dev/tty
+    else
+        read -r answer
+    fi
     case "$answer" in
         [yY]|[yY][eE][sS]) return 0 ;;
         *) return 1 ;;
@@ -341,11 +346,16 @@ printf '\n'
 if [ "$ASSUME_YES" -eq 1 ]; then
     info "Running in --yes mode. Applying all updates..."
 else
-    if ask "Proceed with the update? (item-by-item confirmation)"; then
-        info "Proceeding."
-    else
+    if ! ask "Proceed with the update?"; then
         warn "Update cancelled by user."
         exit 0
+    fi
+    # Offer bulk vs per-package to avoid confusion: y = all, n = confirm each
+    if ask "Update all ${TOTAL_PENDING} package(s) at once without per-package prompts?"; then
+        ASSUME_YES=1
+        info "Will update all at once."
+    else
+        info "Will confirm each package individually."
     fi
 fi
 
@@ -356,15 +366,16 @@ apply_updates() {
                 run_spinner "Upgrading packages ..." apt-get -y upgrade >/dev/null
                 run_spinner "Removing unused packages ..." apt-get -y autoremove >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
+                while IFS= read -r line; do
                     [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk -F/ '{print $1}')"
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." apt-get -y install --only-upgrade "$pkg" >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
                 run_spinner "Removing unused packages ..." apt-get -y autoremove >/dev/null
             fi
             ;;
@@ -373,15 +384,16 @@ apply_updates() {
                 run_spinner "Upgrading packages ..." $PKG_MANAGER -y upgrade >/dev/null
                 run_spinner "Removing unused packages ..." $PKG_MANAGER -y autoremove >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
+                while IFS= read -r line; do
                     [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk '{print $1}' | sed 's/\..*//')"
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." $PKG_MANAGER -y upgrade "$pkg" >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
                 run_spinner "Removing unused packages ..." $PKG_MANAGER -y autoremove >/dev/null
             fi
             ;;
@@ -390,15 +402,16 @@ apply_updates() {
                 run_spinner "Upgrading Homebrew packages ..." brew upgrade >/dev/null
                 run_spinner "Cleaning up ..." brew cleanup >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
-                    [ -z "$line" ] || continue
+                while IFS= read -r line; do
+                    [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk '{print $1}')"
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." brew upgrade "$pkg" >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
                 run_spinner "Cleaning up ..." brew cleanup >/dev/null
             fi
             ;;
@@ -406,47 +419,48 @@ apply_updates() {
             if [ "$ASSUME_YES" -eq 1 ]; then
                 run_spinner "Upgrading packages ..." winget upgrade --all >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
-                    [ -z "$line" ] || continue
+                while IFS= read -r line; do
+                    [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk '{print $2}')"
-                    [ -n "$pkg" ] || continue
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." winget upgrade --id "$pkg" >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
             fi
             ;;
         choco)
             if [ "$ASSUME_YES" -eq 1 ]; then
                 run_spinner "Upgrading packages ..." choco upgrade all -y >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
-                    [ -z "$line" ] || continue
+                while IFS= read -r line; do
+                    [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk -F'|' '{print $1}')"
-                    [ -n "$pkg" ] || continue
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." choco upgrade "$pkg" -y >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
             fi
             ;;
         scoop)
             if [ "$ASSUME_YES" -eq 1 ]; then
                 run_spinner "Upgrading packages ..." scoop update '*' >/dev/null
             else
-                echo "$UPGRADABLE_LIST" | while IFS= read -r line; do
-                    [ -z "$line" ] || continue
+                while IFS= read -r line; do
+                    [ -z "$line" ] && continue
                     pkg="$(echo "$line" | awk '{print $1}')"
+                    [ -z "$pkg" ] && continue
                     if ask "Update package '$pkg'?"; then
                         run_spinner "Updating $pkg ..." scoop update "$pkg" >/dev/null || warn "Failed to update $pkg"
                     else
                         info "Skipped $pkg"
                     fi
-                done
+                done <<< "$UPGRADABLE_LIST"
             fi
             ;;
     esac
